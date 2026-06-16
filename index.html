@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>Lern-Dashboard</title>
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    /* ── Onboarding ─────────────────────────────────────────── */
+    #onboarding-overlay {
+      position: fixed;
+      inset: 0;
+      background: #fff;
+      z-index: 9999;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+    }
+    .onb-container {
+      width: 100%;
+      max-width: 390px;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .onb-slide {
+      display: none;
+      flex-direction: column;
+      flex: 1;
+      overflow-y: auto;
+      padding: 52px 28px 16px;
+    }
+    .onb-slide.active {
+      display: flex;
+      animation: onb-in .22s ease;
+    }
+    @keyframes onb-in {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .onb-title {
+      font-size: 22px;
+      font-weight: 700;
+      color: #1E293B;
+      margin: 0 0 18px;
+      line-height: 1.25;
+    }
+    .onb-text {
+      font-size: 15px;
+      line-height: 1.65;
+      color: #475569;
+      margin: 0 0 12px;
+    }
+    .onb-features {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 6px;
+    }
+    .onb-feature {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 13px 14px;
+      background: #F8FAFC;
+      border-radius: 12px;
+      border: 1px solid #E2E8F0;
+    }
+    .onb-feat-icon {
+      font-size: 22px;
+      flex-shrink: 0;
+      line-height: 1;
+    }
+    .onb-feat-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: #334155;
+    }
+    .onb-feat-desc {
+      font-size: 13px;
+      color: #64748B;
+      margin-top: 2px;
+    }
+    .onb-footer {
+      padding: 14px 28px 36px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      border-top: 1px solid #F1F5F9;
+      flex-shrink: 0;
+    }
+    .onb-dots {
+      display: flex;
+      gap: 6px;
+    }
+    .onb-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #E2E8F0;
+      transition: background .2s, transform .2s;
+    }
+    .onb-dot.active {
+      background: #3B82F6;
+      transform: scale(1.3);
+    }
+    .onb-btn { width: 100%; }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+
+    <!-- ── Screen 1: Ziel ─────────────────────────────────── -->
+    <div id="screen-ziel" class="screen active">
+      <div class="screen-header">
+        <h1 class="screen-title">Mein Ziel</h1>
+        <span class="screen-subtitle">Wo will ich hin?</span>
+      </div>
+
+      <!-- Ziel-Block (Metrik 4 + 5) -->
+      <section class="card" id="ziel-block">
+        <div id="ziel-summary"></div>
+      </section><!-- /ziel-block -->
+
+      <!-- Lernempfehlung (Metrik 9) -->
+      <section class="card" id="recommendation-section">
+        <span class="card-title">Nächster Schritt</span>
+        <div class="rec-card">
+          <div class="rec-tag" id="rec-subject-tag"></div>
+          <p class="rec-text" id="rec-text"></p>
+          <p class="rec-goal-link muted" id="rec-goal-link"></p>
+          <button class="btn btn-primary" id="rec-start-btn">Jetzt starten</button>
+        </div>
+      </section>
+
+      <!-- Semesteranforderungen (Metrik 6) -->
+      <section class="card" id="requirements-section">
+        <div id="req-content"></div>
+      </section>
+
+      <!-- Manuelle Eingabe (Metrik 28) -->
+      <section class="card card-subtle" id="manual-entry-section">
+        <div id="manual-entry-root"></div>
+      </section>
+
+      <div class="screen-spacer"></div>
+    </div><!-- /screen-ziel -->
+
+    <!-- ── Screen 2: Fortschritt ──────────────────────────── -->
+    <div id="screen-fortschritt" class="screen">
+      <div class="screen-header">
+        <h1 class="screen-title">Fortschritt</h1>
+        <span class="screen-subtitle">Wo stehe ich aktuell?</span>
+      </div>
+
+      <!-- 1. Themen-Kachel -->
+      <section class="card" id="themen-kachel">
+        <div class="thema-tabs" id="thema-tabs"></div>
+        <div id="thema-content"></div>
+      </section>
+
+      <!-- 2. Mein Lernfortschritt -->
+      <section class="card" id="semester-chart-card">
+        <div class="chart-header">
+          <div>
+            <div class="card-title">Mein Lernfortschritt</div>
+            <p class="muted small" id="chart-subtitle" style="margin-top:2px;margin-bottom:0;">Sep – Mai</p>
+          </div>
+          <div id="chart-toggle" class="chart-toggle-wrap"></div>
+        </div>
+        <div id="semester-svg-wrap" style="margin-top:10px;"></div>
+        <div id="semester-legend" class="semester-legend"></div>
+        <div id="semester-tooltip" class="semester-tooltip"></div>
+      </section>
+
+      <!-- 3. Noten -->
+      <section class="card" id="noten-section">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+          <div class="card-title" style="margin-bottom:0;">Noten</div>
+          <button class="btn-icon" id="noten-add-btn" aria-label="Note hinzufügen">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
+        </div>
+        <div id="noten-table-wrap"></div>
+      </section>
+
+      <!-- 4. Abzeichen -->
+      <section class="card" id="abzeichen-section">
+        <div class="abz-header">
+          <span class="card-title">Abzeichen</span>
+          <div class="abz-nav-btns">
+            <button class="abz-arrow-btn" id="abz-prev-btn" aria-label="Vorherige Abzeichen">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+            <button class="abz-arrow-btn" id="abz-next-btn" aria-label="Nächste Abzeichen">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="abz-scroll-wrap" id="abz-scroll-wrap"></div>
+        <div class="abz-dots" id="abz-dots"></div>
+      </section>
+
+      <div class="screen-spacer"></div>
+    </div>
+
+    <!-- ── Screen 3: Reflexion ────────────────────────────── -->
+    <div id="screen-reflexion" class="screen">
+      <div class="screen-header">
+        <h1 class="screen-title">Reflexion</h1>
+        <span class="screen-subtitle">Wie lief es?</span>
+      </div>
+
+      <!-- Wöchentlicher Check-in -->
+      <section class="card" id="ref-checkin-card">
+        <div class="card-title">Wöchentlicher Check-in</div>
+
+        <div class="ref-section" style="margin-top:14px;">
+          <p class="ref-question">Wie bewertest du deinen Lernfortschritt diese Woche?</p>
+          <div class="ref-poles">
+            <span>wenig</span>
+            <span>viel</span>
+          </div>
+          <div class="ref-slider-wrap">
+            <input type="range" class="ref-slider ref-slider--empty" id="ref-komp-slider"
+                   min="1" max="10" value="5" step="1">
+            <div class="ref-sys-marker" id="ref-sys-marker" style="display:none;">
+              <div class="ref-sys-marker-tick"></div>
+              <span class="ref-sys-marker-pct" id="ref-sys-marker-pct"></span>
+            </div>
+          </div>
+          <p class="ref-hint" id="ref-komp-hint">Tippen um zu bewerten</p>
+          <p class="ref-sys-text" id="ref-sys-text" style="display:none;"></p>
+        </div>
+
+        <div class="ref-divider"></div>
+
+        <div class="ref-section">
+          <p class="ref-question">Wie fühlst du dich gerade beim Lernen?</p>
+          <div class="ref-poles">
+            <span>😔 frustriert</span>
+            <span>😊 neugierig</span>
+          </div>
+          <input type="range" class="ref-slider ref-slider--empty emo-slider" id="ref-emo-slider"
+                 min="1" max="10" value="5" step="1">
+          <p class="ref-hint" id="ref-emo-hint">Tippen um zu bewerten</p>
+        </div>
+      </section>
+
+      <!-- Empfehlung -->
+      <section class="card" id="ref-empfehlung-card">
+        <div class="card-title">Empfehlung</div>
+        <div id="ref-empfehlung-content" style="margin-top:10px;"></div>
+      </section>
+
+      <!-- Deine Entwicklung -->
+      <section class="card" id="ref-verlauf-card">
+        <div class="card-title">Deine Entwicklung</div>
+        <div id="ref-verlauf-content" style="margin-top:12px;"></div>
+      </section>
+
+      <!-- Dein Lernmuster -->
+      <section class="card" id="ref-muster-card">
+        <div class="card-title">Dein Lernmuster</div>
+        <div id="ref-muster-content" style="margin-top:12px;"></div>
+      </section>
+
+      <div class="screen-spacer"></div>
+    </div>
+
+    <!-- ── Screen 4: Anpassungen ──────────────────────────── -->
+    <div id="screen-anpassungen" class="screen">
+      <div class="screen-header">
+        <h1 class="screen-title">Anpassungen</h1>
+        <span class="screen-subtitle">Dein Dashboard</span>
+      </div>
+
+      <!-- Optional deaktivierbare Elemente -->
+      <section class="card" id="anp-optional-card">
+        <div class="card-title">Anpassbar</div>
+        <p class="muted small" style="margin-top:4px;margin-bottom:14px;">Diese Elemente kannst du nach Bedarf ein- oder ausblenden.</p>
+        <div id="anp-toggle-list"></div>
+      </section>
+
+      <!-- Systemseitig gesperrte Elemente -->
+      <section class="card" id="anp-locked-card">
+        <div class="card-title">Immer sichtbar</div>
+        <p class="muted small" style="margin-top:4px;margin-bottom:14px;">Kernelemente für selbstreguliertes Lernen — können nicht ausgeblendet werden.</p>
+        <div id="anp-locked-list"></div>
+      </section>
+
+      <!-- Push-Benachrichtigungen -->
+      <section class="card" id="anp-push-card">
+        <div class="card-title">Push-Benachrichtigungen</div>
+        <p class="muted small" style="margin-top:4px;margin-bottom:14px;">Erhalte Erinnerungen direkt auf dein Gerät.</p>
+        <div id="anp-push-list"></div>
+      </section>
+
+      <div class="screen-spacer"></div>
+    </div>
+
+    <!-- ── Floating Bottom Navigation ────────────────────── -->
+    <nav class="bottom-nav" id="bottom-nav">
+      <button class="nav-tab active" data-screen="screen-ziel" aria-label="Ziel">
+        <span class="nav-emoji">🎯</span>
+      </button>
+      <button class="nav-tab" data-screen="screen-fortschritt" aria-label="Fortschritt">
+        <span class="nav-emoji">📈</span>
+      </button>
+      <button class="nav-tab" data-screen="screen-reflexion" aria-label="Reflexion">
+        <span class="nav-emoji">💭</span>
+      </button>
+      <button class="nav-tab" data-screen="screen-anpassungen" aria-label="Anpassungen">
+        <span class="nav-emoji">⚙️</span>
+      </button>
+    </nav>
+
+  </div><!-- /app-container -->
+
+  <!-- ── Onboarding ──────────────────────────────────────────── -->
+  <div id="onboarding-overlay">
+    <div class="onb-container">
+
+      <div class="onb-slide active">
+        <h2 class="onb-title">Willkommen! 👋</h2>
+        <p class="onb-text">Du bist im Dashboard deiner neuen Mathe-App, ergänzend zum Unterricht oder einfach weil dir Mathe Freude macht!</p>
+        <p class="onb-text">Das Dashboard begleitet dich beim Lernen und hat 4 Bereiche:</p>
+        <div class="onb-features">
+          <div class="onb-feature">
+            <span class="onb-feat-icon">🎯</span>
+            <div>
+              <div class="onb-feat-name">Ziel</div>
+              <div class="onb-feat-desc">Setze dir Lernziele</div>
+            </div>
+          </div>
+          <div class="onb-feature">
+            <span class="onb-feat-icon">📈</span>
+            <div>
+              <div class="onb-feat-name">Fortschritt</div>
+              <div class="onb-feat-desc">Verfolge deine Entwicklung</div>
+            </div>
+          </div>
+          <div class="onb-feature">
+            <span class="onb-feat-icon">💭</span>
+            <div>
+              <div class="onb-feat-name">Reflexion</div>
+              <div class="onb-feat-desc">Reflektiere dein Lernen</div>
+            </div>
+          </div>
+          <div class="onb-feature">
+            <span class="onb-feat-icon">⚙️</span>
+            <div>
+              <div class="onb-feat-name">Anpassungen</div>
+              <div class="onb-feat-desc">Passe das Dashboard an</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="onb-slide">
+        <h2 class="onb-title">So funktioniert die App</h2>
+        <div class="onb-features">
+          <div class="onb-feature">
+            <span class="onb-feat-icon">📚</span>
+            <div>
+              <div class="onb-feat-name">Themen</div>
+              <div class="onb-feat-desc">Die großen Lernbereiche wie Analysis oder Algebra.</div>
+            </div>
+          </div>
+          <div class="onb-feature">
+            <span class="onb-feat-icon">📖</span>
+            <div>
+              <div class="onb-feat-name">Module</div>
+              <div class="onb-feat-desc">Unterthemen innerhalb eines Themas, zum Beispiel Ableitungsregeln.</div>
+            </div>
+          </div>
+          <div class="onb-feature" style="align-items:flex-start;">
+            <span class="onb-feat-icon" style="margin-top:1px;">✏️</span>
+            <div>
+              <div class="onb-feat-name">Aufgaben</div>
+              <div class="onb-feat-desc">Es gibt viele Aufgaben, du musst aber nicht alle spielen. Bestimmte Aufgaben sind als Testaufgaben markiert. Löst du diese beim ersten Versuch richtig, gilt das Modul als verstanden.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="onb-slide">
+        <h2 class="onb-title">🎯 Mein Ziel</h2>
+        <p class="onb-text">Hier siehst du dein aktuelles Lernziel. Du kannst zwischen einem Zeitziel (z.B. 30 Min/Tag) und einem Lernziel (z.B. bestimmtes Modul abschließen) wählen.</p>
+      </div>
+
+      <div class="onb-slide">
+        <h2 class="onb-title">📈 Fortschritt</h2>
+        <p class="onb-text">Hier siehst du wie weit du in den einzelnen Themengebieten bist und wie sich deine Kompetenz über das Schuljahr entwickelt.</p>
+      </div>
+
+      <div class="onb-slide">
+        <h2 class="onb-title">💭 Reflexion</h2>
+        <p class="onb-text">Einmal pro Woche kannst du hier einschätzen wie gut du gelernt hast und wie es dir dabei ging. Das hilft dir besser zu lernen.</p>
+      </div>
+
+      <div class="onb-slide">
+        <h2 class="onb-title">Bereit? Los geht's! 🚀</h2>
+        <p class="onb-text">Du kannst das Dashboard jetzt ausprobieren. Viel Spaß beim Lernen!</p>
+      </div>
+
+      <div class="onb-footer">
+        <div class="onb-dots" id="onb-dots">
+          <span class="onb-dot active"></span>
+          <span class="onb-dot"></span>
+          <span class="onb-dot"></span>
+          <span class="onb-dot"></span>
+          <span class="onb-dot"></span>
+          <span class="onb-dot"></span>
+        </div>
+        <button class="btn btn-primary onb-btn" id="onb-btn">Weiter</button>
+      </div>
+
+    </div>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
