@@ -107,6 +107,38 @@
       transform: scale(1.3);
     }
     .onb-btn { width: 100%; }
+    .onb-embedded-nav {
+      width: 100%;
+      height: 68px;
+      background: rgba(20, 20, 20, 0.75);
+      backdrop-filter: blur(20px) saturate(180%);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 32px;
+      box-shadow: 0 8px 32px rgba(0,0,0,.4);
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+      padding: 0 8px;
+      flex-shrink: 0;
+    }
+    .onb-embedded-nav button {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 44px;
+      height: 44px;
+      border: none;
+      background: none;
+      cursor: pointer;
+      border-radius: 16px;
+      -webkit-tap-highlight-color: transparent;
+      transition: background .18s;
+    }
+    .onb-embedded-nav button:active {
+      transform: scale(.92);
+      background: rgba(255,255,255,0.15);
+    }
   </style>
 </head>
 <body>
@@ -116,7 +148,7 @@
     <div id="screen-ziel" class="screen active">
       <div class="screen-header">
         <h1 class="screen-title">Mein Ziel</h1>
-        <span class="screen-subtitle">Wo will ich hin?</span>
+        <span class="screen-subtitle">Was will ich erreichen?</span>
       </div>
 
       <!-- Ziel-Block (Metrik 4 + 5) -->
@@ -140,11 +172,6 @@
         <div id="req-content"></div>
       </section>
 
-      <!-- Manuelle Eingabe (Metrik 28) -->
-      <section class="card card-subtle" id="manual-entry-section">
-        <div id="manual-entry-root"></div>
-      </section>
-
       <div class="screen-spacer"></div>
     </div><!-- /screen-ziel -->
 
@@ -166,9 +193,8 @@
         <div class="chart-header">
           <div>
             <div class="card-title">Mein Lernfortschritt</div>
-            <p class="muted small" id="chart-subtitle" style="margin-top:2px;margin-bottom:0;">Sep – Mai</p>
+            <p class="muted small" style="margin-top:2px;margin-bottom:0;">Entwicklung im Schuljahr</p>
           </div>
-          <div id="chart-toggle" class="chart-toggle-wrap"></div>
         </div>
         <div id="semester-svg-wrap" style="margin-top:10px;"></div>
         <div id="semester-legend" class="semester-legend"></div>
@@ -206,33 +232,46 @@
       <div class="screen-spacer"></div>
     </div>
 
-    <!-- ── Screen 3: Reflexion ────────────────────────────── -->
+    <!-- ── Screen 3: Lernzeit ───────────────────────────────── -->
+    <div id="screen-lernzeit" class="screen">
+      <div class="screen-header">
+        <h1 class="screen-title">Lernzeit</h1>
+        <span class="screen-subtitle">Wann und wie viel lerne ich?</span>
+      </div>
+
+      <section class="card" id="lz-muster-card">
+        <div id="lz-muster-content"></div>
+      </section>
+
+      <section class="card card-subtle" id="lz-manual-section">
+        <div id="lz-manual-root"></div>
+      </section>
+
+      <div class="screen-spacer"></div>
+    </div>
+
+    <!-- ── Screen 4: Reflexion ────────────────────────────── -->
     <div id="screen-reflexion" class="screen">
       <div class="screen-header">
-        <h1 class="screen-title">Reflexion</h1>
-        <span class="screen-subtitle">Wie lief es?</span>
+        <h1 class="screen-title">Check-in</h1>
+        <span class="screen-subtitle">Wie lief meine Woche?</span>
       </div>
 
       <!-- Wöchentlicher Check-in -->
       <section class="card" id="ref-checkin-card">
-        <div class="card-title">Wöchentlicher Check-in</div>
+        <div class="card-title">Wöchentlicher Check-in<span class="info-icon" data-tip-title="Wozu ist der Check-in?" data-tip-text="Deine Einschätzung hilft dir zu verstehen wie du gerade lernst. Das Dashboard nutzt deine Eingabe um dir eine passende Lernstrategie zu empfehlen.">?</span></div>
 
         <div class="ref-section" style="margin-top:14px;">
           <p class="ref-question">Wie bewertest du deinen Lernfortschritt diese Woche?</p>
           <div class="ref-poles">
-            <span>wenig</span>
-            <span>viel</span>
+            <span>nicht gut</span>
+            <span>sehr gut</span>
           </div>
           <div class="ref-slider-wrap">
             <input type="range" class="ref-slider ref-slider--empty" id="ref-komp-slider"
                    min="1" max="10" value="5" step="1">
-            <div class="ref-sys-marker" id="ref-sys-marker" style="display:none;">
-              <div class="ref-sys-marker-tick"></div>
-              <span class="ref-sys-marker-pct" id="ref-sys-marker-pct"></span>
-            </div>
           </div>
           <p class="ref-hint" id="ref-komp-hint">Tippen um zu bewerten</p>
-          <p class="ref-sys-text" id="ref-sys-text" style="display:none;"></p>
         </div>
 
         <div class="ref-divider"></div>
@@ -249,28 +288,22 @@
         </div>
       </section>
 
-      <!-- Empfehlung -->
+      <!-- Deine Lernstrategie -->
       <section class="card" id="ref-empfehlung-card">
-        <div class="card-title">Empfehlung</div>
+        <div class="card-title">Deine Lernstrategie<span class="info-icon" data-tip-title="Wie entsteht diese Empfehlung?" data-tip-text="Das Dashboard kombiniert deinen Lernfortschritt und dein Wohlbefinden um dir einen passenden nächsten Schritt vorzuschlagen.">?</span></div>
         <div id="ref-empfehlung-content" style="margin-top:10px;"></div>
       </section>
 
       <!-- Deine Entwicklung -->
       <section class="card" id="ref-verlauf-card">
-        <div class="card-title">Deine Entwicklung</div>
+        <div class="card-title">Deine Entwicklung<span class="info-icon" data-tip-title="Wozu dieser Verlauf?" data-tip-text="Wenn du deinen gefühlten Fortschritt und deine Stimmung beim Lernen regelmäßig einträgst, erkennst du Muster über das Schuljahr — zum Beispiel ob du vor Prüfungen besonders motiviert bist oder nach den Ferien einen Aufschwung erlebst.">?</span></div>
         <div id="ref-verlauf-content" style="margin-top:12px;"></div>
-      </section>
-
-      <!-- Dein Lernmuster -->
-      <section class="card" id="ref-muster-card">
-        <div class="card-title">Dein Lernmuster</div>
-        <div id="ref-muster-content" style="margin-top:12px;"></div>
       </section>
 
       <div class="screen-spacer"></div>
     </div>
 
-    <!-- ── Screen 4: Anpassungen ──────────────────────────── -->
+    <!-- ── Screen 5: Anpassungen ──────────────────────────── -->
     <div id="screen-anpassungen" class="screen">
       <div class="screen-header">
         <h1 class="screen-title">Anpassungen</h1>
@@ -303,13 +336,16 @@
 
     <!-- ── Floating Bottom Navigation ────────────────────── -->
     <nav class="bottom-nav" id="bottom-nav">
-      <button class="nav-tab active" data-screen="screen-ziel" aria-label="Ziel">
+      <button class="nav-tab active" data-screen="screen-ziel" aria-label="Mein Ziel">
         <span class="nav-emoji">🎯</span>
       </button>
       <button class="nav-tab" data-screen="screen-fortschritt" aria-label="Fortschritt">
         <span class="nav-emoji">📈</span>
       </button>
-      <button class="nav-tab" data-screen="screen-reflexion" aria-label="Reflexion">
+      <button class="nav-tab" data-screen="screen-lernzeit" aria-label="Lernzeit">
+        <span class="nav-emoji">⏱️</span>
+      </button>
+      <button class="nav-tab" data-screen="screen-reflexion" aria-label="Check-in">
         <span class="nav-emoji">💭</span>
       </button>
       <button class="nav-tab" data-screen="screen-anpassungen" aria-label="Anpassungen">
@@ -319,98 +355,127 @@
 
   </div><!-- /app-container -->
 
+  <!-- ── Aufgaben-Overlay ──────────────────────────────────── -->
+  <div id="aufgaben-overlay" style="display:none;position:fixed;inset:0;z-index:500;background:var(--color-bg);max-width:390px;margin:0 auto;overflow-y:auto;">
+    <div style="padding:16px 16px 0;">
+      <button id="aufgaben-back-btn" style="background:none;border:none;color:var(--accent-blue);font-size:15px;font-weight:500;cursor:pointer;padding:8px 0;margin-bottom:12px;">← Zurück zum Dashboard</button>
+      <div id="aufgaben-badges" style="display:flex;gap:6px;margin-bottom:16px;"></div>
+      <h2 id="aufgaben-kapitel" style="font-size:17px;font-weight:600;margin:0 0 14px;color:var(--color-text);line-height:1.35;"></h2>
+    </div>
+    <div style="padding:0 16px;">
+      <div class="card" style="margin-bottom:12px;">
+        <p id="aufgaben-text" style="font-size:15px;line-height:1.6;margin:0;color:var(--color-text);"></p>
+      </div>
+      <div id="aufgaben-antworten" style="display:flex;flex-direction:column;gap:8px;"></div>
+      <p style="font-size:13px;color:var(--color-text-muted);text-align:center;padding:20px 0 32px;">
+        Das ist eine Vorschau — in der App kannst du hier deine Antwort auswählen.
+      </p>
+    </div>
+  </div>
+
   <!-- ── Onboarding ──────────────────────────────────────────── -->
   <div id="onboarding-overlay">
     <div class="onb-container">
 
-      <div class="onb-slide active">
+      <!-- Slide 1 — Willkommen -->
+      <div class="onb-slide active" style="justify-content:space-between;">
         <h2 class="onb-title">Willkommen! 👋</h2>
-        <p class="onb-text">Du bist im Dashboard deiner neuen Mathe-App, ergänzend zum Unterricht oder einfach weil dir Mathe Freude macht!</p>
-        <p class="onb-text">Das Dashboard begleitet dich beim Lernen und hat 4 Bereiche:</p>
+        <p class="onb-text">Stell dir vor, du übst Mathematik ergänzend zum Unterricht in einer Lern-App mit Aufgaben und Erklärungen. Das Dashboard ist ein neuer Bereich dieser App. Es zeigt dir wie du lernst, wie weit du im Stoff bist und wo du dich verbessern kannst. Genau dieses Dashboard testest du heute.</p>
+        <svg width="100%" viewBox="0 0 240 145" style="display:block;margin:10px auto;" xmlns="http://www.w3.org/2000/svg">
+          <rect x="20" y="0" width="200" height="54" rx="12" fill="#F2F2F7" stroke="#E2E8F0" stroke-width="1.5"/>
+          <text x="120" y="24" text-anchor="middle" font-size="13" font-weight="600" fill="#334155">Lern-App</text>
+          <text x="120" y="41" text-anchor="middle" font-size="10" fill="#8E8E93">Aufgaben lösen</text>
+          <line x1="120" y1="64" x2="120" y2="80" stroke="#007AFF" stroke-width="1.8"/>
+          <polyline points="115,64 120,57 125,64" fill="none" stroke="#007AFF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          <polyline points="115,80 120,87 125,80" fill="none" stroke="#007AFF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          <rect x="20" y="91" width="200" height="54" rx="12" fill="rgba(0,122,255,0.1)" stroke="rgba(0,122,255,0.4)" stroke-width="1.5"/>
+          <text x="120" y="115" text-anchor="middle" font-size="13" font-weight="600" fill="#007AFF">Dashboard</text>
+          <text x="120" y="132" text-anchor="middle" font-size="10" fill="#8E8E93">Fortschritt begleiten</text>
+        </svg>
+      </div>
+
+      <!-- Slide 2 — So lernst du in der App -->
+      <div class="onb-slide">
+        <h2 class="onb-title">So kannst du dir die App vorstellen</h2>
+        <p class="onb-text">Alle Lernaufgaben sind den 4 Themenbereichen zugeordnet (z. B. Algebra). Jeder Themenbereich ist in Kapitel unterteilt. Jedes Kapitel steht für ein neues mathematisches Konzept das du verstehen sollst. Jedes Kapitel enthält mehrere Aufgaben.</p>
+        <div style="background:#fff;border-radius:14px;box-shadow:0 2px 8px rgba(0,0,0,0.08),0 0 1px rgba(0,0,0,0.04);padding:14px;margin:4px 0 0;">
+          <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+            <span style="background:rgba(0,122,255,0.1);color:#007AFF;border-radius:20px;padding:3px 10px;font-size:12px;font-weight:500;">Lineare Funktionen</span>
+            <span style="background:rgba(52,199,89,0.1);color:#34C759;border-radius:20px;padding:3px 10px;font-size:12px;font-weight:500;">Einfach</span>
+          </div>
+          <p style="font-size:14px;color:#334155;line-height:1.5;margin:0 0 12px;">Bestimme die Steigung der Geraden durch die Punkte A(0|1) und B(2|5).</p>
+          <div style="display:flex;flex-direction:column;gap:7px;">
+            <div style="background:#F8FAFC;border-radius:10px;padding:11px 13px;font-size:14px;color:#475569;border:1px solid #E2E8F0;">a)&nbsp;&nbsp;m = 1</div>
+            <div style="background:#F8FAFC;border-radius:10px;padding:11px 13px;font-size:14px;color:#475569;border:1px solid #E2E8F0;">b)&nbsp;&nbsp;m = 2</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Slide 3 — Das Dashboard -->
+      <div class="onb-slide">
+        <h2 class="onb-title">Das Dashboard</h2>
+        <p class="onb-text">Die 5 Menüpunkte:</p>
         <div class="onb-features">
           <div class="onb-feature">
             <span class="onb-feat-icon">🎯</span>
             <div>
-              <div class="onb-feat-name">Ziel</div>
-              <div class="onb-feat-desc">Setze dir Lernziele</div>
+              <div class="onb-feat-name">Mein Ziel</div>
+              <div class="onb-feat-desc">Lernziele setzen und verfolgen</div>
             </div>
           </div>
           <div class="onb-feature">
             <span class="onb-feat-icon">📈</span>
             <div>
               <div class="onb-feat-name">Fortschritt</div>
-              <div class="onb-feat-desc">Verfolge deine Entwicklung</div>
+              <div class="onb-feat-desc">Deinen Fortschritt im Stoff sehen</div>
+            </div>
+          </div>
+          <div class="onb-feature">
+            <span class="onb-feat-icon">⏱️</span>
+            <div>
+              <div class="onb-feat-name">Lernzeit</div>
+              <div class="onb-feat-desc">Lernverhalten und Gewohnheiten verstehen</div>
             </div>
           </div>
           <div class="onb-feature">
             <span class="onb-feat-icon">💭</span>
             <div>
-              <div class="onb-feat-name">Reflexion</div>
-              <div class="onb-feat-desc">Reflektiere dein Lernen</div>
+              <div class="onb-feat-name">Check-in</div>
+              <div class="onb-feat-desc">Woche reflektieren und Empfehlungen erhalten</div>
             </div>
           </div>
           <div class="onb-feature">
             <span class="onb-feat-icon">⚙️</span>
             <div>
               <div class="onb-feat-name">Anpassungen</div>
-              <div class="onb-feat-desc">Passe das Dashboard an</div>
+              <div class="onb-feat-desc">Elemente ein-/ausblenden</div>
             </div>
           </div>
         </div>
+        <p style="font-size:13px;color:#8E8E93;line-height:1.5;margin:14px 0 0;">Die 5 Bereiche kannst du unabhängig voneinander nutzen.</p>
       </div>
 
-      <div class="onb-slide">
-        <h2 class="onb-title">So funktioniert die App</h2>
-        <div class="onb-features">
-          <div class="onb-feature">
-            <span class="onb-feat-icon">📚</span>
-            <div>
-              <div class="onb-feat-name">Themen</div>
-              <div class="onb-feat-desc">Die großen Lernbereiche wie Analysis oder Algebra.</div>
-            </div>
-          </div>
-          <div class="onb-feature">
-            <span class="onb-feat-icon">📖</span>
-            <div>
-              <div class="onb-feat-name">Module</div>
-              <div class="onb-feat-desc">Unterthemen innerhalb eines Themas, zum Beispiel Ableitungsregeln.</div>
-            </div>
-          </div>
-          <div class="onb-feature" style="align-items:flex-start;">
-            <span class="onb-feat-icon" style="margin-top:1px;">✏️</span>
-            <div>
-              <div class="onb-feat-name">Aufgaben</div>
-              <div class="onb-feat-desc">Es gibt viele Aufgaben, du musst aber nicht alle spielen. Bestimmte Aufgaben sind als Testaufgaben markiert. Löst du diese beim ersten Versuch richtig, gilt das Modul als verstanden.</div>
-            </div>
-          </div>
+      <!-- Slide 4 — Los geht's -->
+      <div class="onb-slide" style="justify-content:center;gap:28px;">
+        <div>
+          <h2 class="onb-title" style="margin-bottom:12px;">Bereit? Los geht's! 🚀</h2>
+          <p class="onb-text" style="margin-bottom:0;">Schau dich in Ruhe um — es gibt kein Richtig oder Falsch. Du kannst jederzeit zwischen den 5 Bereichen wechseln.</p>
         </div>
-      </div>
-
-      <div class="onb-slide">
-        <h2 class="onb-title">🎯 Mein Ziel</h2>
-        <p class="onb-text">Hier siehst du dein aktuelles Lernziel. Du kannst zwischen einem Zeitziel (z.B. 30 Min/Tag) und einem Lernziel (z.B. bestimmtes Modul abschließen) wählen.</p>
-      </div>
-
-      <div class="onb-slide">
-        <h2 class="onb-title">📈 Fortschritt</h2>
-        <p class="onb-text">Hier siehst du wie weit du in den einzelnen Themengebieten bist und wie sich deine Kompetenz über das Schuljahr entwickelt.</p>
-      </div>
-
-      <div class="onb-slide">
-        <h2 class="onb-title">💭 Reflexion</h2>
-        <p class="onb-text">Einmal pro Woche kannst du hier einschätzen wie gut du gelernt hast und wie es dir dabei ging. Das hilft dir besser zu lernen.</p>
-      </div>
-
-      <div class="onb-slide">
-        <h2 class="onb-title">Bereit? Los geht's! 🚀</h2>
-        <p class="onb-text">Du kannst das Dashboard jetzt ausprobieren. Viel Spaß beim Lernen!</p>
+        <div>
+          <p style="font-size:13px;color:#8E8E93;text-align:center;margin:0 0 12px;">Tippe auf einen Bereich um zu starten.</p>
+          <nav id="onb-nav" class="onb-embedded-nav">
+            <button data-screen="screen-ziel"><span class="nav-emoji">🎯</span></button>
+            <button data-screen="screen-fortschritt"><span class="nav-emoji">📈</span></button>
+            <button data-screen="screen-lernzeit"><span class="nav-emoji">⏱️</span></button>
+            <button data-screen="screen-reflexion"><span class="nav-emoji">💭</span></button>
+            <button data-screen="screen-anpassungen"><span class="nav-emoji">⚙️</span></button>
+          </nav>
+        </div>
       </div>
 
       <div class="onb-footer">
         <div class="onb-dots" id="onb-dots">
           <span class="onb-dot active"></span>
-          <span class="onb-dot"></span>
-          <span class="onb-dot"></span>
           <span class="onb-dot"></span>
           <span class="onb-dot"></span>
           <span class="onb-dot"></span>

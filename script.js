@@ -1,3 +1,6 @@
+/* ── Festes Datum für den Prototyp ───────────────────────── */
+const HEUTE = { tag: 'Mo', datum: 29, monat: 6, jahr: 2026, wochentag: 1 };
+
 /* ── Laufzeit-State ───────────────────────────────────────── */
 const manualEntries  = [];
 const kranktage      = Array(7).fill(false);
@@ -11,11 +14,63 @@ function showScreen(screenId) {
 
   document.getElementById(screenId).classList.add('active');
   document.querySelector(`[data-screen="${screenId}"]`).classList.add('active');
+
+  if (screenId === 'screen-fortschritt') {
+    animateThemaBar();
+    animateSemesterLines();
+  } else if (screenId === 'screen-lernzeit') {
+    animateHeatmapCells();
+  }
 }
 
 document.querySelectorAll('.nav-tab').forEach(tab => {
   tab.addEventListener('click', () => showScreen(tab.dataset.screen));
 });
+
+/* ── Screen-Animationen ───────────────────────────────────── */
+function animateThemaBar() {
+  const fill = document.querySelector('.thema-bar-fill');
+  if (!fill) return;
+  const pct = fill.dataset.pct || '0';
+  fill.style.transition = 'none';
+  fill.style.width = '0%';
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    fill.style.transition = '';
+    fill.style.width = pct + '%';
+  }));
+}
+
+function animateSemesterLines() {
+  const paths = document.querySelectorAll('#semester-svg-wrap .chart-line-path');
+  paths.forEach((path, i) => {
+    const len = path.getTotalLength ? path.getTotalLength() : 0;
+    if (!len) return;
+    path.style.transition = 'none';
+    path.style.strokeDasharray = len;
+    path.style.strokeDashoffset = len;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      path.style.transition = `stroke-dashoffset 800ms ease-in-out ${i * 100}ms`;
+      path.style.strokeDashoffset = 0;
+    }));
+  });
+}
+
+function animateHeatmapCells() {
+  const cells = document.querySelectorAll('.lz-heatmap-cell');
+  cells.forEach(cell => {
+    cell.style.animation = 'none';
+    cell.style.opacity = '0';
+  });
+  requestAnimationFrame(() => {
+    cells.forEach((cell, idx) => {
+      const di = idx % 7;
+      const wi = Math.floor(idx / 7);
+      const delay = di * 30 + wi * 120;
+      cell.style.opacity = '';
+      cell.style.animation = `fadeScaleIn 150ms ease-out ${delay}ms both`;
+    });
+  });
+}
 
 
 /* ── Toast ───────────────────────────────────────────────── */
@@ -31,6 +86,93 @@ function showToast(msg) {
   toast.classList.add('show');
   clearTimeout(toast._t);
   toast._t = setTimeout(() => toast.classList.remove('show'), 2200);
+}
+
+/* ── Info-Tooltips ───────────────────────────────────────── */
+function initInfoTooltips() {
+  const tip = document.createElement('div');
+  tip.className = 'info-tooltip';
+  tip.style.display = 'none';
+  document.body.appendChild(tip);
+
+  let anchor = null;
+
+  document.addEventListener('click', e => {
+    const icon = e.target.closest('.info-icon');
+    if (icon) {
+      if (anchor === icon && tip.style.display !== 'none') {
+        tip.style.display = 'none';
+        anchor = null;
+        return;
+      }
+      tip.innerHTML = `<span class="info-tooltip-title">${icon.dataset.tipTitle || ''}</span>${icon.dataset.tipText || ''}`;
+      tip.style.display = 'block';
+      anchor = icon;
+
+      const r  = icon.getBoundingClientRect();
+      const vw = window.innerWidth;
+      const tw = Math.min(260, vw - 24);
+      let   lx = r.left;
+      if (lx + tw > vw - 8) lx = vw - tw - 8;
+      if (lx < 8)           lx = 8;
+      tip.style.maxWidth = tw + 'px';
+      tip.style.top  = (r.bottom + 6) + 'px';
+      tip.style.left = lx + 'px';
+    } else {
+      tip.style.display = 'none';
+      anchor = null;
+    }
+  });
+}
+
+/* ── Schnell-Modal: Lernzeit ohne App ───────────────────── */
+function _openSchnellModal() {
+  const MON     = ['','Jänner','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+  const dateLbl = `Heute · ${HEUTE.tag}, ${HEUTE.datum}. ${MON[HEUTE.monat]}`;
+  let selMin    = null;
+
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:400;display:flex;align-items:flex-end;justify-content:center;animation:overlayIn .2s ease;';
+  overlay.innerHTML = `
+    <div style="width:100%;max-width:390px;background:var(--color-surface);border-radius:16px 16px 0 0;padding:20px 16px 36px;animation:slideUp .25s ease;">
+      <div style="font-size:16px;font-weight:700;color:var(--color-text);margin-bottom:14px;">Lernzeit eintragen</div>
+      <p style="font-size:13px;color:var(--color-text-muted);margin:0 0 12px;">${dateLbl}</p>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;" id="sle-chips">
+        ${[15,30,45,60,90].map(m => `<button class="chip" data-min="${m}">${m} min</button>`).join('')}
+      </div>
+      <input type="text" id="sle-notiz" class="input" placeholder="Womit hast du gelernt? (optional)" style="margin-bottom:14px;"/>
+      <button class="btn btn-primary" id="sle-save" style="width:100%;" disabled>Speichern</button>
+      <button id="sle-cancel" style="display:block;width:100%;background:none;border:none;color:var(--color-text-muted);font-size:14px;padding:12px 0 0;cursor:pointer;text-align:center;">Abbrechen</button>
+    </div>`;
+
+  document.body.appendChild(overlay);
+  document.body.style.overflow = 'hidden';
+
+  const chips   = overlay.querySelectorAll('#sle-chips .chip');
+  const saveBtn = overlay.querySelector('#sle-save');
+
+  chips.forEach(chip => chip.addEventListener('click', () => {
+    chips.forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+    selMin = +chip.dataset.min;
+    saveBtn.disabled = false;
+  }));
+
+  const close = () => { overlay.remove(); document.body.style.overflow = ''; };
+  overlay.querySelector('#sle-cancel').addEventListener('click', close);
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+
+  saveBtn.addEventListener('click', () => {
+    if (!selMin) return;
+    manualEntries.push({
+      typ: 'analog', tag: HEUTE.tag, datum: HEUTE.datum, monat: HEUTE.monat, minuten: selMin,
+      date: `${HEUTE.jahr}-${String(HEUTE.monat).padStart(2,'0')}-${String(HEUTE.datum).padStart(2,'0')}T00:00:00.000Z`
+    });
+    close();
+    if (_renderZielSummary) _renderZielSummary();
+    renderLernzeitHeatmap();
+    showToast('Lernzeit eingetragen ✓');
+  });
 }
 
 /* ── Ziel Block (Metrik 4 + 5) ───────────────────────────── */
@@ -65,13 +207,16 @@ function initZielBlock() {
   const defaultThema  = themen.find(t => t.id === (aktivesZiel.thema || 'AN')) || themen[0];
   const defaultModule = defaultThema.module.filter(m => !m.gemeistert).slice(0, 3).map(m => m.id);
 
+  const _def14    = new Date(HEUTE.jahr, HEUTE.monat - 1, HEUTE.datum + 14);
+  const _def14Str = `${_def14.getDate()}. ${MONATE[_def14.getMonth()]} ${_def14.getFullYear()}`;
+
   const zielState = {
     typ:                aktivesZiel.typ || 'leistung',
     tage:               woche.filter(t => t.geplant).map(t => t.tag),
     minuten:            aktivesZiel.minuten || 15,
     themaId:            defaultThema.id,
     ausgewaehlteModule: defaultModule,
-    enddatum:           aktivesZiel.enddatum || '30. Juni 2026',
+    enddatum:           aktivesZiel.enddatum || _def14Str,
   };
 
   // ── Entwurfszustand (nur während Modal geöffnet) ──────────
@@ -92,18 +237,31 @@ function initZielBlock() {
   // ── Zusammenfassung rendern ───────────────────────────────
   function renderZielSummary() {
     const container = document.getElementById('ziel-summary');
+    if (aktivesZiel.typ === null) {
+      container.innerHTML = `
+        <div class="ziel-type-row"><span></span>${PENCIL_BTN}</div>
+        <p style="text-align:center;color:var(--color-text-muted);font-size:15px;padding:16px 8px 8px;">
+          Noch kein Ziel gesetzt. Tippe auf ✏️ um dein erstes Ziel einzustellen.
+        </p>`;
+      document.getElementById('ziel-edit-btn').addEventListener('click', openModal);
+      return;
+    }
     if (zielState.typ === 'zeit') _renderZeitChart(container);
     else                          _renderLeistungChart(container);
     document.getElementById('ziel-edit-btn').addEventListener('click', openModal);
   }
 
   function _renderZeitChart(container) {
-    const goalMin  = zielState.minuten;
-    const ALL_TAGS = ['Mo','Di','Mi','Do','Fr','Sa','So'];
+    const goalMin    = zielState.minuten;
+    const lerntage   = zielState.tage;
+    const ALL_TAGS   = ['Mo','Di','Mi','Do','Fr','Sa','So'];
+    const manualForDay = tag => manualEntries
+      .filter(e => e.typ === 'analog' && e.tag === tag)
+      .reduce((sum, e) => sum + e.minuten, 0);
     const daily    = ALL_TAGS.map((tag, i) => ({
       tag,
       app:     lernzeitmuster[i] ? lernzeitmuster[i].minuten : 0,
-      manual:  manuellZeiten[i]  ? manuellZeiten[i].minuten  : 0,
+      manual:  manualForDay(tag),
       done:    woche[i] ? woche[i].erledigt : false,
       planned: woche[i] ? woche[i].geplant  : false,
     }));
@@ -111,6 +269,7 @@ function initZielBlock() {
     const maxY  = Math.max(goalMin * 1.3, Math.max.apply(null, daily.map(d => d.app + d.manual)), 1);
     const VW=340, VH=158, ML=28, MR=6;
     const cRowY=6, cRowH=24, cTop=cRowY+cRowH+6, cBot=VH-22, cH=cBot-cTop;
+    const todayIdx  = HEUTE.wochentag - 1;
     const cW    = VW - ML - MR;
     const colW  = cW / 7, barW = Math.min(colW * 0.52, 20);
     const xC    = i => ML + (i + 0.5) * colW;
@@ -119,10 +278,15 @@ function initZielBlock() {
 
     const checkRow = daily.map((d, i) => {
       const cx = xC(i), cy = cRowY + cRowH / 2, r = 9;
-      const erreicht = (d.app + d.manual) >= goalMin;
-      if (erreicht)
+      if (kranktage[i])
+        return `<text x="${cx.toFixed(1)}" y="${(cy + 5).toFixed(1)}" text-anchor="middle" font-size="14">🤒</text>`;
+      const istLerntag = lerntage.includes(d.tag);
+      const erreicht   = (d.app + d.manual) >= goalMin;
+      if (istLerntag && erreicht)
         return `<circle cx="${cx.toFixed(1)}" cy="${cy}" r="${r}" fill="#22C55E"/>` +
                `<polyline points="${(cx-4).toFixed(1)},${cy} ${(cx-1.5).toFixed(1)},${cy+3} ${(cx+4.5).toFixed(1)},${cy-3}" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
+      if (istLerntag && !erreicht && i >= todayIdx)
+        return `<circle cx="${cx.toFixed(1)}" cy="${cy}" r="${r}" fill="none" stroke="#007AFF" stroke-width="2"/>`;
       return `<circle cx="${cx.toFixed(1)}" cy="${cy}" r="${r}" fill="none" stroke="#E2E8F0" stroke-width="1.5"/>`;
     }).join('');
 
@@ -144,24 +308,44 @@ function initZielBlock() {
       `<text x="${xC(i).toFixed(1)}" y="${VH-5}" text-anchor="middle" font-size="11" fill="#64748B">${d.tag}</text>`
     ).join('');
 
+    const todayColX    = ML + todayIdx * colW;
+    const todayHighlight = `<rect x="${todayColX.toFixed(1)}" y="${cTop.toFixed(1)}" width="${colW.toFixed(1)}" height="${cH.toFixed(1)}" rx="4" fill="rgba(0,122,255,0.06)" stroke="#007AFF" stroke-width="1.5" stroke-opacity="0.35"/>`;
+    const cChartMidY   = Math.round((cTop + cBot) / 2);
+
     container.innerHTML = `
-      <div class="ziel-type-row"><span class="summary-type-label">Zeitziel · ${goalMin} min/Tag</span>${PENCIL_BTN}</div>
+      <div class="ziel-type-row"><span class="summary-type-label">Zeitziel</span>${PENCIL_BTN}</div>
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;margin:2px 0 10px;">
+        <div style="display:flex;align-items:baseline;gap:4px;">
+          <span style="font-size:30px;font-weight:700;color:var(--color-text);letter-spacing:-0.5px;">${goalMin}</span>
+          <span style="font-size:15px;font-weight:500;color:var(--color-text-muted);">min/Tag</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;padding-bottom:3px;">
+          <span style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--color-text-muted);">
+            <span style="width:8px;height:8px;border-radius:50%;background:#3B82F6;display:inline-block;"></span>App
+          </span>
+          <span style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--color-text-muted);">
+            <span style="width:8px;height:8px;border-radius:50%;background:#BFDBFE;border:1px solid #93C5FD;display:inline-block;"></span>Ohne App
+          </span>
+        </div>
+      </div>
       <svg width="100%" viewBox="0 0 ${VW} ${VH}" style="display:block;overflow:visible;">
         ${checkRow}
+        ${todayHighlight}
         <line x1="${ML}" y1="${cBot}" x2="${VW-MR}" y2="${cBot}" stroke="#E2E8F0" stroke-width="1"/>
         <line x1="${ML}" y1="${goalY.toFixed(1)}" x2="${VW-MR}" y2="${goalY.toFixed(1)}"
               stroke="#F59E0B" stroke-width="1.5" stroke-dasharray="4,3"/>
-        <text x="${(ML-2).toFixed(1)}" y="${(goalY+4).toFixed(1)}" text-anchor="end"
-              font-size="10" fill="#F59E0B" font-weight="600">${goalMin}</text>
+        <text x="${(VW-MR-2).toFixed(1)}" y="${(goalY-3).toFixed(1)}" text-anchor="end"
+              font-size="10" fill="#F59E0B" font-weight="600">Ziel: ${goalMin} min</text>
+        <text transform="rotate(-90,8,${cChartMidY})" x="8" y="${cChartMidY}" text-anchor="middle" font-size="9" fill="#94A3B8">Minuten</text>
         ${bars}
         ${xLabels}
       </svg>
-      <div class="chart-legend">
-        <span class="legend-dot" style="background:#3B82F6;"></span>
-        <span class="legend-lbl">App</span>
-        <span class="legend-dot" style="background:#BFDBFE;border:1px solid #93C5FD;"></span>
-        <span class="legend-lbl">Manuell</span>
-      </div>`;
+      <button id="zeitziel-schnelleintrag-btn" class="btn btn-secondary"
+        style="width:100%;margin-top:12px;font-size:13px;">
+        + Lernzeit ohne App eintragen
+      </button>`;
+    container.querySelector('#zeitziel-schnelleintrag-btn')
+      .addEventListener('click', _openSchnellModal);
   }
 
   function _renderLeistungChart(container) {
@@ -172,7 +356,7 @@ function initZielBlock() {
     const verlauf   = aktivesZiel.verlauf || [];
     const startDate = new Date(aktivesZiel.zielStartdatum);
     const endDate   = new Date(enddatumToISO(zielState.enddatum));
-    const today     = new Date(); today.setHours(0, 0, 0, 0);
+    const today     = new Date(HEUTE.jahr, HEUTE.monat - 1, HEUTE.datum);
     const spanMs    = Math.max(endDate - startDate, 86400000);
 
     const fmtD = d => {
@@ -211,69 +395,88 @@ function initZielBlock() {
       return `${cmd} ${xT(new Date(v.datum)).toFixed(1)} ${yK(v.konzepte).toFixed(1)}`;
     }).join(' ');
 
-    // Dots at every verlauf entry
-    const dots = verlauf.map((v, i) => {
+    // Historical dots (light blue)
+    const dots = verlauf.map(v => {
       const cx = xT(new Date(v.datum)).toFixed(1);
       const cy = yK(v.konzepte).toFixed(1);
-      const isLast = i === verlauf.length - 1;
-      return `<circle cx="${cx}" cy="${cy}" r="${isLast ? 4 : 3}"
-        fill="${isLast ? '#3B82F6' : '#93C5FD'}" stroke="white" stroke-width="1.5"/>`;
+      return `<circle cx="${cx}" cy="${cy}" r="3" fill="#93C5FD" stroke="white" stroke-width="1.5"/>`;
     }).join('');
 
-    // Count label near last dot
-    const countLabelY = yLastV < MT + 20 ? yLastV + 14 : yLastV - 9;
+    // Today dot — y-value explicitly from aktivesZiel.verlauf[last].konzepte
+    const todayDotY   = yK(lastKonzepte);
+    const countLabelY = todayDotY < MT + 20 ? todayDotY + 14 : todayDotY - 9;
 
     // Tempo calculations
+    const frischstart    = verlauf.length <= 1 && lastKonzepte === 0;
     const daysRemaining  = Math.max(0, Math.ceil((endDate - today) / 86400000));
     const konzepteNoch   = totalKonzepte - lastKonzepte;
     const daysSinceStart = Math.max(1, Math.round((today - startDate) / 86400000));
-    const tempoNoetig    = daysRemaining > 0 ? (konzepteNoch / daysRemaining).toFixed(1) : '–';
-    const tempoBisher    = (lastKonzepte / daysSinceStart).toFixed(1);
+    const tempoNoetig    = daysRemaining > 0 ? Math.ceil(konzepteNoch / daysRemaining) : '–';
+    const tempoBisher    = frischstart ? '–' : Math.ceil(lastKonzepte / daysSinceStart);
     const zielErreicht   = konzepteNoch <= 0;
-    const gutImPlan      = zielErreicht || (daysRemaining > 0
-      ? parseFloat(tempoBisher) >= parseFloat(tempoNoetig)
+    const gutImPlan      = zielErreicht || (!frischstart && daysRemaining > 0
+      ? tempoBisher >= tempoNoetig
       : true);
-    const tempoColor = gutImPlan ? '#22C55E' : '#F97316';
 
     container.innerHTML = `
       <div class="ziel-type-row"><span class="summary-type-label">Lernziel</span>${PENCIL_BTN}</div>
       <p class="summary-thema">${thema.name}</p>
       <p class="summary-meta" style="margin-top:4px;">
-        ${selModule.length} Module · ${totalKonzepte} Konzepte · bis ${zielState.enddatum}
+        ${selModule.length} Kapitel · ${totalKonzepte} Aufgaben · bis ${zielState.enddatum}
       </p>
       <svg width="100%" viewBox="0 0 ${VW} ${VH}" style="display:block;overflow:visible;margin-top:8px;">
         <line x1="${ML}" y1="${cBot}" x2="${xEnd.toFixed(1)}" y2="${cBot}" stroke="#E2E8F0" stroke-width="1"/>
         <line x1="${ML}" y1="${yGoal.toFixed(1)}" x2="${xEnd.toFixed(1)}" y2="${yGoal.toFixed(1)}"
               stroke="#F59E0B" stroke-width="1.5" stroke-dasharray="5,3"/>
         <text x="${(xEnd - 2).toFixed(1)}" y="${(yGoal - 4).toFixed(1)}" text-anchor="end"
-              font-size="10" fill="#F59E0B" font-weight="600">Ziel: ${totalKonzepte}</text>
-        <path d="${areaPath}" fill="#3B82F6" fill-opacity="0.12"/>
-        <path d="${linePath}" fill="none" stroke="#3B82F6" stroke-width="2"
-              stroke-linecap="round" stroke-linejoin="round"/>
+              font-size="10" fill="#F59E0B" font-weight="600">Ziel: ${totalKonzepte} Aufg.</text>
+        ${!frischstart ? `
+          <path d="${areaPath}" fill="#3B82F6" fill-opacity="0.12"/>
+          <path d="${linePath}" fill="none" stroke="#3B82F6" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round"/>
+        ` : ''}
         <line x1="${xLastV.toFixed(1)}" y1="${yLastV.toFixed(1)}" x2="${xEnd.toFixed(1)}" y2="${yGoal.toFixed(1)}"
               stroke="#94A3B8" stroke-width="1.5" stroke-dasharray="4,3"/>
         <line x1="${xToday.toFixed(1)}" y1="${MT}" x2="${xToday.toFixed(1)}" y2="${cBot}"
               stroke="#3B82F6" stroke-width="1" stroke-dasharray="2,2" opacity="0.35"/>
         ${dots}
-        <text x="${xLastV.toFixed(1)}" y="${countLabelY.toFixed(1)}" text-anchor="middle"
-              font-size="10" fill="#3B82F6" font-weight="600">${lastKonzepte}</text>
-        <text x="${xStart.toFixed(1)}" y="${VH - 5}" text-anchor="start"
-              font-size="10" fill="#64748B">${fmtD(startDate)}</text>
-        <text x="${xToday.toFixed(1)}" y="${VH - 5}" text-anchor="middle"
+        ${!frischstart ? `
+          <circle cx="${xToday.toFixed(1)}" cy="${todayDotY.toFixed(1)}" r="4" fill="#3B82F6" stroke="white" stroke-width="1.5"/>
+          <text x="${xToday.toFixed(1)}" y="${countLabelY.toFixed(1)}" text-anchor="middle"
+                font-size="10" fill="#3B82F6" font-weight="600">Aktuell: ${lastKonzepte}</text>
+        ` : ''}
+        <text transform="rotate(-90,8,${Math.round((MT + cBot) / 2)})" x="8" y="${Math.round((MT + cBot) / 2)}" text-anchor="middle" font-size="9" fill="#94A3B8">Aufgaben</text>
+        ${!frischstart ? `
+          <text x="${xStart.toFixed(1)}" y="${VH - 5}" text-anchor="start"
+                font-size="10" fill="#64748B">${fmtD(startDate)}</text>
+        ` : ''}
+        <text x="${xToday.toFixed(1)}" y="${VH - 5}" text-anchor="${frischstart ? 'start' : 'middle'}"
               font-size="10" fill="#3B82F6" font-weight="600">Heute</text>
         <text x="${xEnd.toFixed(1)}" y="${VH - 5}" text-anchor="end"
               font-size="10" fill="#64748B">${fmtD(endDate)}</text>
       </svg>
+      <div style="display:flex;align-items:center;gap:4px;margin:4px 0 6px;">
+        <svg width="16" height="4" style="flex-shrink:0;overflow:visible;"><line x1="0" y1="2" x2="16" y2="2" stroke="#94A3B8" stroke-width="1.5" stroke-dasharray="4,3"/></svg>
+        <span style="font-size:11px;color:var(--color-text-muted);">Projektion</span>
+        <span class="info-icon" data-tip-title="Was zeigt die gestrichelte Linie?" data-tip-text="Die Linie zeigt den Weg den du noch vor dir hast um dein Ziel bis zum Enddatum zu erreichen.">?</span>
+      </div>
       <div class="tempo-block">
         ${zielErreicht ? `
           <div class="tempo-row"><span>Ziel frühzeitig erreicht! 🎉</span></div>
         ` : `
-          <div class="tempo-row"><span>Bisheriges Tempo: ${tempoBisher} Konzepte/Tag</span></div>
-          <div class="tempo-row"><span>Nötiges Tempo: ${tempoNoetig} Konzepte/Tag</span></div>
-          <div class="tempo-row"><span>${gutImPlan
-            ? `Läuft nach Plan <span style="color:#22C55E;font-size:10px;">●</span>`
-            : `Aufholen um Ziel zu erreichen <span style="color:#F97316;font-size:10px;">●</span>`
-          }</span></div>
+          <div style="display:flex;gap:8px;margin-bottom:8px;">
+            <div style="flex:1;background:rgba(0,122,255,0.07);border-radius:10px;padding:10px 12px;">
+              <div style="font-size:11px;color:var(--color-text-muted);margin-bottom:4px;">Dein Tempo<span class="info-icon" data-tip-title="Was ist dein Tempo?" data-tip-text="Zeigt wie viele Aufgaben du bisher pro Tag gemeistert hast — seit du dein Ziel gesetzt hast.">?</span></div>
+              <div style="font-size:16px;font-weight:700;color:var(--accent-blue);">${tempoBisher}<span style="font-size:11px;font-weight:500;color:var(--color-text-muted);">${frischstart ? '' : ' Aufgaben / Tag'}</span></div>
+            </div>
+            <div style="flex:1;background:rgba(255,149,0,0.07);border-radius:10px;padding:10px 12px;">
+              <div style="font-size:11px;color:var(--color-text-muted);margin-bottom:4px;">Nötiges Tempo<span class="info-icon" data-tip-title="Was ist das nötige Tempo?" data-tip-text="Zeigt wie viele Aufgaben du pro Tag lösen musst um dein Ziel rechtzeitig bis zum Enddatum zu erreichen.">?</span></div>
+              <div style="font-size:16px;font-weight:700;color:var(--accent-amber);">${tempoNoetig}<span style="font-size:11px;font-weight:500;color:var(--color-text-muted);"> Aufgaben / Tag</span></div>
+            </div>
+          </div>
+          <div style="font-size:13px;font-weight:500;color:${frischstart ? 'var(--accent-blue)' : gutImPlan ? 'var(--accent-green)' : 'var(--accent-amber)'};">
+            ${frischstart ? 'Du hast gerade gestartet — leg los! 🚀' : gutImPlan ? 'Du liegst gut im Plan ✓' : 'Du musst etwas zulegen ⚠️'}
+          </div>
         `}
       </div>`;
   }
@@ -356,7 +559,7 @@ function initZielBlock() {
               <span>Zuletzt abgeschlossen: <strong>${lastMastered.name}</strong></span>
             </div>` : ''}
           <label class="field-label" style="margin-top:${lastMastered ? 12 : 0}px;">
-            Module wählen <span class="muted">(max. 5)</span>
+            Kapitel wählen <span class="muted">(max. 5)</span>
           </label>
           <div class="modul-check-list">
             ${openModule.map(m => `
@@ -369,7 +572,7 @@ function initZielBlock() {
               </label>`).join('')}
           </div>
           <p class="modal-count-summary">
-            <strong>${draftModule.length} Module</strong> · <strong>${totalKonzepte} Konzepte</strong>
+            <strong>${draftModule.length} Kapitel</strong> · <strong>${totalKonzepte} Kapitel</strong>
           </p>
         </div>
         <div class="modal-nav">
@@ -383,22 +586,26 @@ function initZielBlock() {
       const selModule     = thema.module.filter(m => draftModule.includes(m.id));
       const totalKonzepte = selModule.reduce((s, m) => s + m.aufgaben, 0);
       const isoVal        = enddatumToISO(draftEnddatum);
-      const _now          = new Date(); _now.setHours(0,0,0,0);
-      const _minIso       = _now.toISOString().slice(0,10);
+      const _now          = new Date(HEUTE.jahr, HEUTE.monat - 1, HEUTE.datum);
+      const _minIso       = `${HEUTE.jahr}-${String(HEUTE.monat).padStart(2,'0')}-${String(HEUTE.datum).padStart(2,'0')}`;
       const _sel          = isoVal ? new Date(isoVal) : null;
       const dateOk        = !!(_sel && _sel >= _now);
+      const _daysLeft     = dateOk ? Math.max(1, Math.ceil((_sel - _now) / 86400000)) : 0;
+      const _warningTempo = _daysLeft > 0 ? Math.ceil(totalKonzepte / _daysLeft) : null;
+      const _showWarning  = _warningTempo !== null && _warningTempo > 8;
       return `
         <div class="modal-section">
           <label class="field-label">Bis wann?</label>
           <input type="date" id="modal-enddatum" class="input" value="${isoVal}"
             style="margin-top:8px;" min="${_minIso}" />
           <p class="date-error"${dateOk ? ' style="display:none;"' : ''}>Bitte ein zukünftiges Datum wählen</p>
+          <p id="tempo-warning" style="font-size:13px;color:var(--accent-amber);margin-top:8px;${_showWarning ? '' : 'display:none;'}">⚠️ Bei diesem Enddatum müsstest du ${_warningTempo} Aufgaben pro Tag schaffen — das ist sehr ambitioniert.</p>
           <div class="step3-summary">
             <span class="step3-item">${thema.name}</span>
             <span class="step3-sep">·</span>
-            <span class="step3-item">${selModule.length} Module</span>
+            <span class="step3-item">${selModule.length} Kapitel</span>
             <span class="step3-sep">·</span>
-            <span class="step3-item">${totalKonzepte} Konzepte</span>
+            <span class="step3-item">${totalKonzepte} Aufgaben</span>
           </div>
         </div>
         <div class="modal-nav">
@@ -456,20 +663,32 @@ function initZielBlock() {
       if (nextBtn) nextBtn.addEventListener('click', () => { draftSchritt = 3; renderModal(); });
 
     } else {
-      const dateInput = modalOverlay.querySelector('#modal-enddatum');
-      const saveBtn   = modalOverlay.querySelector('.modal-save-btn');
-      const errorEl   = modalOverlay.querySelector('.date-error');
+      const dateInput    = modalOverlay.querySelector('#modal-enddatum');
+      const saveBtn      = modalOverlay.querySelector('.modal-save-btn');
+      const errorEl      = modalOverlay.querySelector('.date-error');
+      const warningEl    = modalOverlay.querySelector('#tempo-warning');
+      const _totalKonz   = themen.find(t => t.id === draftThemaId)?.module
+        .filter(m => draftModule.includes(m.id)).reduce((s, m) => s + m.aufgaben, 0) || 0;
       dateInput.addEventListener('change', e => {
         const val = e.target.value;
-        const now = new Date(); now.setHours(0,0,0,0);
+        const now = new Date(HEUTE.jahr, HEUTE.monat - 1, HEUTE.datum);
         const sel = val ? new Date(val) : null;
         if (sel && sel >= now) {
           draftEnddatum         = isoToEnddatum(val);
           errorEl.style.display = 'none';
           saveBtn.disabled      = false;
+          const days  = Math.max(1, Math.ceil((sel - now) / 86400000));
+          const tempo = Math.ceil(_totalKonz / days);
+          if (tempo > 8) {
+            warningEl.textContent   = `⚠️ Bei diesem Enddatum müsstest du ${tempo} Aufgaben pro Tag schaffen — das ist sehr ambitioniert.`;
+            warningEl.style.display = '';
+          } else {
+            warningEl.style.display = 'none';
+          }
         } else {
-          errorEl.style.display = '';
-          saveBtn.disabled      = true;
+          errorEl.style.display   = '';
+          warningEl.style.display = 'none';
+          saveBtn.disabled        = true;
         }
       });
       modalOverlay.querySelector('.modal-back-btn').addEventListener('click', () => { draftSchritt = 2; renderModal(); });
@@ -532,9 +751,17 @@ function initZielBlock() {
       zielState.themaId            = draftThemaId;
       zielState.ausgewaehlteModule = [...draftModule];
       zielState.enddatum           = draftEnddatum;
+      const heuteIso = `${HEUTE.jahr}-${String(HEUTE.monat).padStart(2,'0')}-${String(HEUTE.datum).padStart(2,'0')}`;
+      aktivesZiel.zielStartdatum      = heuteIso;
+      aktivesZiel.verlauf             = [{ datum: heuteIso, konzepte: startKonzepte }];
+      aktivesZiel.thema               = draftThemaId;
+      aktivesZiel.ausgewaehlteModule  = [...draftModule];
     }
+    aktivesZiel.typ = zielState.typ;
+    goalSet = true;
     closeModal();
     renderZielSummary();
+    initRecommendation();
     showToast('Ziel gespeichert ✓');
   }
 
@@ -545,21 +772,89 @@ function initZielBlock() {
 
 /* ── Lernempfehlung (Metrik 9) ───────────────────────────── */
 function initRecommendation() {
-  const rec = empfehlungen.ziel;
-  document.getElementById('rec-subject-tag').textContent =
-    `${rec.themaName} · ${rec.modul}`;
-  document.getElementById('rec-text').textContent = rec.begruendung;
+  const section  = document.getElementById('recommendation-section');
+  const tagEl    = document.getElementById('rec-subject-tag');
+  const textEl   = document.getElementById('rec-text');
+  const goalEl   = document.getElementById('rec-goal-link');
+  const startBtn = document.getElementById('rec-start-btn');
 
-  const recThema   = themen.find(t => t.id === rec.thema) || themen[0];
-  const recModul   = recThema.module.find(m => m.name.includes(rec.modul));
-  const geschafft  = recModul ? recModul.geschafft : 0;
-  const aufgaben   = recModul ? recModul.aufgaben  : 0;
-  document.getElementById('rec-goal-link').textContent =
-    `${geschafft} von ${aufgaben} Konzepten gemeistert`;
+  if (!aktivesZiel.typ) {
+    section.style.display = 'none';
+    return;
+  }
+  section.style.display = '';
 
-  document.getElementById('rec-start-btn').addEventListener('click', () => {
-    showToast('Lerneinheit wird gestartet …');
-  });
+  if (aktivesZiel.typ === 'leistung') {
+    const thema   = themen.find(t => t.id === aktivesZiel.thema) || themen[0];
+    const selIds  = aktivesZiel.ausgewaehlteModule || [];
+    const offene  = thema.module.filter(m => selIds.includes(m.id) && !m.gemeistert);
+
+    if (offene.length === 0) {
+      tagEl.textContent      = thema.name;
+      textEl.textContent     = 'Alle gewählten Kapitel gemeistert 🎉 Setze ein neues Ziel um weiterzumachen.';
+      goalEl.textContent     = '';
+      startBtn.style.display = 'none';
+      return;
+    }
+
+    const worst = offene.reduce((min, m) => {
+      return (m.aufgaben > 0 ? m.geschafft / m.aufgaben : 0) <
+             (min.aufgaben > 0 ? min.geschafft / min.aufgaben : 0) ? m : min;
+    }, offene[0]);
+
+    tagEl.textContent      = `${thema.name} · ${worst.name}`;
+    textEl.textContent     = `Bei ${worst.name} hast du noch am meisten Potential. Genau hier lohnt es sich jetzt weiterzumachen.`;
+    goalEl.textContent     = `${worst.geschafft} von ${worst.aufgaben} Aufgaben gemeistert`;
+    startBtn.style.display = '';
+    startBtn.onclick       = () => openAufgabenScreen(thema.id);
+
+  } else {
+    const schwächstes   = themen.reduce((min, t) => t.fortschritt < min.fortschritt ? t : min, themen[0]);
+    const erstesOffenes = schwächstes.module.find(m => !m.gemeistert);
+    const kapitelName   = erstesOffenes ? erstesOffenes.name : schwächstes.name;
+    const gemeistert    = schwächstes.module.filter(m => m.gemeistert).length;
+    const gesamt        = schwächstes.module.length;
+
+    tagEl.textContent      = `${schwächstes.name} · ${kapitelName}`;
+    textEl.textContent     = `In ${schwächstes.name} hast du noch am meisten Potential. Jetzt wäre ein guter Moment weiterzumachen.`;
+    goalEl.textContent     = `${gemeistert} von ${gesamt} Kapiteln gemeistert`;
+    startBtn.style.display = '';
+    startBtn.onclick       = () => openAufgabenScreen(schwächstes.id);
+  }
+}
+
+/* ── Aufgaben-Overlay (Vorschau) ─────────────────────────── */
+function openAufgabenScreen(themaId) {
+  const aufgabe = mockAufgaben.find(a => a.thema === themaId);
+  if (!aufgabe) return;
+
+  const overlay = document.getElementById('aufgaben-overlay');
+
+  const themaMap = { AG: 'Algebra & Geometrie', FA: 'Funktionale Abhängigkeiten', AN: 'Analysis', WS: 'Wahrscheinlichkeit & Statistik' };
+  const themaName = themaMap[aufgabe.thema] || aufgabe.thema;
+
+  document.getElementById('aufgaben-badges').innerHTML =
+    `<span class="status-badge badge-progress">${themaName}</span>` +
+    `<span class="status-badge" style="background:rgba(142,142,147,0.12);color:var(--color-text-muted);">${aufgabe.schwierigkeit}</span>`;
+
+  document.getElementById('aufgaben-kapitel').textContent = aufgabe.kapitel;
+  document.getElementById('aufgaben-text').textContent    = aufgabe.aufgabe;
+
+  const buchstaben = ['a', 'b', 'c', 'd'];
+  document.getElementById('aufgaben-antworten').innerHTML = aufgabe.antworten.map((ant, i) =>
+    `<div class="aufgaben-antwort-btn">
+      <span class="aufgaben-antwort-buchstabe">${buchstaben[i]}</span>
+      <span class="aufgaben-antwort-text">${ant}</span>
+    </div>`
+  ).join('');
+
+  overlay.style.display = 'block';
+  document.body.style.overflow = 'hidden';
+
+  document.getElementById('aufgaben-back-btn').onclick = () => {
+    overlay.style.display = 'none';
+    document.body.style.overflow = '';
+  };
 }
 
 /* ── Semesteranforderungen (Metrik 6) ────────────────────── */
@@ -573,10 +868,17 @@ function initRequirements() {
     </button>
     <ul id="req-list" style="display:none;margin:12px 0 0 0;padding:0;list-style:none;">
       ${SA.module.map((m, i) => {
-        const dot = m.status === 'gemeistert' ? '#22C55E' : '#F97316';
+        const dot      = m.status === 'gemeistert' ? '#22C55E' : '#F97316';
+        const themaClr = FT_COLORS[m.thema] || '#8E8E93';
+        const themaNam = FT_NAMES[m.thema]  || m.thema;
         return `<li style="display:flex;align-items:center;gap:8px;padding:7px 0;font-size:14px;color:#334155;${i < SA.module.length - 1 ? 'border-bottom:1px solid #F1F5F9;' : ''}">
-          <span style="color:${dot};font-size:10px;flex-shrink:0;">●</span>${m.name}</li>`;
+          <span style="color:${dot};font-size:10px;flex-shrink:0;">●</span>
+          <span style="background:${themaClr}1A;color:${themaClr};border-radius:6px;padding:2px 8px;font-size:11px;font-weight:500;flex-shrink:0;">${themaNam}</span>
+          ${m.name}</li>`;
       }).join('')}
+      <li style="padding:12px 0 4px;">
+        <a href="#" id="req-fortschritt-link" style="font-size:13px;color:var(--accent-blue);text-decoration:none;">→ Zum aktuellen Fortschritt</a>
+      </li>
     </ul>`;
 
   const btn     = document.getElementById('req-content').querySelector('.req-accordion-btn');
@@ -588,56 +890,86 @@ function initRequirements() {
     list.style.display  = open ? 'block' : 'none';
     chevron.style.transform = open ? 'rotate(180deg)' : 'rotate(0deg)';
   });
+
+  document.getElementById('req-fortschritt-link').addEventListener('click', e => {
+    e.preventDefault();
+    showScreen('screen-fortschritt');
+  });
 }
 
 /* ── Manuelle Eingabe (Metrik 28) ────────────────────────── */
 function initManualEntry() {
-  const root     = document.getElementById('manual-entry-root');
-  const ALL_TAGS = ['Mo','Di','Mi','Do','Fr','Sa','So'];
-  const todayTag = ALL_TAGS[(new Date().getDay() + 6) % 7];
+  const root      = document.getElementById('lz-manual-root');
+  const ALLE_TAGE = ['Mo','Di','Mi','Do','Fr','Sa','So'];
+  const MONATS_NAMEN = ['','Jänner','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+  const todayTag  = HEUTE.tag;
 
-  let activePanel = null; // null | 'analog' | 'krank'
-  let histOpen    = false;
-  const selDay    = { analog: todayTag, krank: todayTag };
+  const rueckwirkend = Array.from({length: 7}, (_, i) => {
+    const d      = HEUTE.datum - 7 + i;
+    const tagIdx = (HEUTE.wochentag - 1 - 7 + i + 7) % 7;
+    return { tag: ALLE_TAGE[tagIdx], datum: d < 1 ? d + 30 : d, monat: d < 1 ? 5 : 6 };
+  });
 
-  function dayChips(type) {
-    return ALL_TAGS.map(t =>
-      `<button class="chip day-chip-m${t === selDay[type] ? ' active' : ''}" data-day="${t}" data-type="${type}">${t}</button>`
-    ).join('');
+  let activePanel  = null; // null | 'analog' | 'krank'
+  let histOpen     = false;
+  let selKrankTage = []; // indices into rueckwirkend
+
+  function krankChips() {
+    return rueckwirkend.map((t, i) => {
+      const dateStr  = `${HEUTE.jahr}-${String(t.monat).padStart(2,'0')}-${String(t.datum).padStart(2,'0')}`;
+      const disabled = manualEntries.some(e => e.date && e.date.startsWith(dateStr));
+      const selected = selKrankTage.includes(i);
+      let sty;
+      if (disabled) {
+        sty = `padding:5px 10px;border-radius:20px;font-size:13px;font-weight:500;cursor:not-allowed;` +
+              `background:#F8FAFC;border:1px solid #E2E8F0;color:#CBD5E1;`;
+      } else if (selected) {
+        sty = `padding:5px 10px;border-radius:20px;font-size:13px;font-weight:500;cursor:pointer;` +
+              `background:rgba(0,122,255,0.12);border:1.5px solid var(--accent-blue);color:var(--accent-blue);`;
+      } else {
+        sty = `padding:5px 10px;border-radius:20px;font-size:13px;font-weight:500;cursor:pointer;` +
+              `background:#F8FAFC;border:1px solid #E2E8F0;color:#475569;`;
+      }
+      return `<button class="krank-chip" data-idx="${i}" style="${sty}"${disabled ? ' disabled' : ''}>${t.tag} ${t.datum}.${t.monat}.</button>`;
+    }).join('');
   }
 
   function histHtml() {
     if (manualEntries.length === 0)
       return '<li style="color:#94A3B8;font-size:13px;padding:6px 0;">Noch keine Einträge.</li>';
     return [...manualEntries].reverse().map(e => {
-      const label = e.tag === todayTag ? 'Heute' : e.tag;
-      const text  = e.typ === 'analog'
-        ? `${label} · ${e.minuten} min analog`
-        : `${label} · Krank${e.notiz ? ' · ' + e.notiz : ''}`;
+      const isToday = e.datum === HEUTE.datum && e.monat === HEUTE.monat;
+      const label   = isToday ? 'Heute' : `${e.tag} ${e.datum}.${e.monat}.`;
+      const text    = e.typ === 'analog'
+        ? `${label} · ${e.minuten} min`
+        : `${label} · Fehltag${e.notiz ? ' · ' + e.notiz : ''}`;
       return `<li style="padding:6px 0;font-size:13px;color:#334155;border-bottom:1px solid #F1F5F9;">${text}</li>`;
     }).join('');
   }
 
   function btnStyle(panel) {
-    const on = activePanel === panel;
-    return `flex:1;padding:8px 6px;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;` +
-           `background:${on ? '#EFF6FF' : '#F8FAFC'};` +
-           `border:1px solid ${on ? '#3B82F6' : '#E2E8F0'};` +
-           `color:${on ? '#3B82F6' : '#475569'};`;
+    if (panel === 'analog') {
+      return `width:100%;padding:11px 14px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;border:none;` +
+             `background:${activePanel === 'analog' ? '#0062CC' : 'var(--accent-blue)'};color:white;`;
+    } else {
+      return `width:100%;padding:11px 14px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;` +
+             `background:${activePanel === 'krank' ? 'rgba(0,122,255,0.06)' : 'transparent'};` +
+             `border:1.5px solid var(--accent-blue);color:var(--accent-blue);`;
+    }
   }
 
   function render() {
+    const heuteLbl = `Heute · ${HEUTE.tag}, ${HEUTE.datum}. ${MONATS_NAMEN[HEUTE.monat]}`;
     root.innerHTML = `
-      <div class="card-title small" style="margin-bottom:12px;">Manuell eintragen</div>
-      <div style="display:flex;gap:8px;">
-        <button id="btn-analog" style="${btnStyle('analog')}">+ Ohne App gelernt</button>
-        <button id="btn-krank"  style="${btnStyle('krank')}">+ Heute nicht gelernt</button>
+      <div class="card-title small" style="margin-bottom:12px;">Ohne App eintragen<span class="info-icon" data-tip-title="Wozu manuell eintragen?" data-tip-text="Lernzeit mit Schulbuch oder Karteikarten zählt auch. Trag sie hier ein damit dein Lernmuster vollständig ist. Fehltage kannst du eintragen wenn du krank warst — so entsteht kein Druck deine Gewohnheiten trotzdem aufrecht zu erhalten.">?</span></div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <button id="btn-analog" style="${btnStyle('analog')}">+ Lernzeit eintragen</button>
+        <button id="btn-krank"  style="${btnStyle('krank')}">+ Fehltag eintragen</button>
       </div>
 
       ${activePanel === 'analog' ? `
         <div style="margin-top:14px;padding-top:14px;border-top:1px solid #F1F5F9;">
-          <label class="field-label">Wochentag</label>
-          <div class="chip-row" style="margin:8px 0 12px;">${dayChips('analog')}</div>
+          <p style="font-size:13px;color:var(--color-text-muted);margin:0 0 12px;">${heuteLbl}</p>
           <label class="field-label">Minuten</label>
           <div class="input-row" style="margin-top:6px;">
             <input type="number" id="analog-min" class="input input-sm" min="1" max="480" placeholder="z.B. 30"/>
@@ -648,8 +980,8 @@ function initManualEntry() {
 
       ${activePanel === 'krank' ? `
         <div style="margin-top:14px;padding-top:14px;border-top:1px solid #F1F5F9;">
-          <label class="field-label">Wochentag</label>
-          <div class="chip-row" style="margin:8px 0 12px;">${dayChips('krank')}</div>
+          <label class="field-label" style="display:block;margin-bottom:8px;">Tag auswählen</label>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;">${krankChips()}</div>
           <label class="field-label">Grund (optional)</label>
           <input type="text" id="krank-notiz" class="input" style="margin-top:6px;" placeholder="z.B. Kopfweh"/>
           <button class="btn btn-secondary" id="krank-save" style="margin-top:12px;">Speichern</button>
@@ -677,13 +1009,13 @@ function initManualEntry() {
       render();
     });
 
-    root.querySelectorAll('.day-chip-m').forEach(chip => {
-      chip.addEventListener('click', e => {
-        e.preventDefault();
-        const type = chip.dataset.type;
-        selDay[type] = chip.dataset.day;
-        root.querySelectorAll(`.day-chip-m[data-type="${type}"]`).forEach(c => c.classList.remove('active'));
-        chip.classList.add('active');
+    root.querySelectorAll('.krank-chip:not([disabled])').forEach(chip => {
+      chip.addEventListener('click', () => {
+        const idx = +chip.dataset.idx;
+        const pos = selKrankTage.indexOf(idx);
+        if (pos === -1) selKrankTage.push(idx);
+        else selKrankTage.splice(pos, 1);
+        render();
       });
     });
 
@@ -691,25 +1023,30 @@ function initManualEntry() {
     if (analogSave) analogSave.addEventListener('click', () => {
       const minVal = +document.getElementById('analog-min').value;
       if (!minVal || minVal < 1) { showToast('Bitte Minuten eingeben.'); return; }
-      const idx = ALL_TAGS.indexOf(selDay.analog);
-      if (idx >= 0) manuellZeiten[idx].minuten += minVal;
-      manualEntries.push({ typ: 'analog', tag: selDay.analog, minuten: minVal, date: new Date().toISOString() });
+      manualEntries.push({ typ: 'analog', tag: todayTag, datum: HEUTE.datum, monat: HEUTE.monat, minuten: minVal, date: `${HEUTE.jahr}-${String(HEUTE.monat).padStart(2,'0')}-${String(HEUTE.datum).padStart(2,'0')}T00:00:00.000Z` });
       if (_renderZielSummary) _renderZielSummary();
       showToast('Lernzeit eingetragen ✓');
       activePanel = null;
       render();
+      renderLernzeitHeatmap();
     });
 
     const krankSave = document.getElementById('krank-save');
     if (krankSave) krankSave.addEventListener('click', () => {
+      if (selKrankTage.length === 0) { showToast('Bitte mindestens einen Tag auswählen.'); return; }
       const notiz = document.getElementById('krank-notiz').value.trim();
-      const idx   = ALL_TAGS.indexOf(selDay.krank);
-      if (idx >= 0) kranktage[idx] = true;
-      manualEntries.push({ typ: 'krank', tag: selDay.krank, notiz, date: new Date().toISOString() });
+      selKrankTage.forEach(i => {
+        const t      = rueckwirkend[i];
+        const dayIdx = ALLE_TAGE.indexOf(t.tag);
+        if (dayIdx >= 0) kranktage[dayIdx] = true;
+        manualEntries.push({ typ: 'krank', tag: t.tag, datum: t.datum, monat: t.monat, notiz, date: `${HEUTE.jahr}-${String(t.monat).padStart(2,'0')}-${String(t.datum).padStart(2,'0')}T00:00:00.000Z` });
+      });
       if (_renderZielSummary) _renderZielSummary();
-      showToast('Krankmeldung eingetragen ✓');
-      activePanel = null;
+      showToast('Fehltag eingetragen ✓');
+      selKrankTage = [];
+      activePanel  = null;
       render();
+      renderLernzeitHeatmap();
     });
 
     document.getElementById('hist-toggle').addEventListener('click', () => {
@@ -723,7 +1060,7 @@ function initManualEntry() {
 }
 
 /* ── Screen 2: Fortschritt ────────────────────────────────── */
-const FT_COLORS = { AG: '#3B82F6', FA: '#F59E0B', AN: '#22C55E', WS: '#8B5CF6' };
+const FT_COLORS = { AG: '#007AFF', FA: '#AF52DE', AN: '#5856D6', WS: '#32ADE6' };
 const FT_NAMES  = { AG: 'Algebra', FA: 'Funktionen', AN: 'Analysis', WS: 'Statistik' };
 
 function initFortschritt() {
@@ -777,7 +1114,7 @@ function renderThemenKachel() {
         ? `<span class="mod-pct mod-pct--amber">${pctM}%</span>`
         : '';
 
-      return `<div class="mod-row${isWeak ? ' mod-row--amber' : ''}">
+      return `<div class="mod-row">
         ${dot}
         <span class="mod-name${m.gemeistert ? ' mod-name--done' : !inProgress ? ' mod-name--muted' : ''}">${m.name}</span>
         ${pctLabel}
@@ -787,33 +1124,37 @@ function renderThemenKachel() {
     contentEl.innerHTML = `
       <div class="thema-progress-section">
         <div class="thema-progress-hdr">
-          <span class="thema-big-pct" style="color:${clr};">${pct}%</span>
-          <span class="muted small">${masteredCount} von ${total} Module gemeistert</span>
+          <span class="thema-big-pct" style="color:${clr};">${pct}%<span class="info-icon" data-tip-title="Was ist Kompetenz %?" data-tip-text="Zeigt wie viele Kapitel du in allen verfügbaren Kapiteln dieses Themenbereichs bereits gemeistert hast.">?</span></span>
+          <span class="muted small">${masteredCount} von ${total} Kapitel gemeistert</span>
         </div>
         <div class="thema-bar-track">
-          <div class="thema-bar-fill" style="width:${pct}%;background:${clr};"></div>
+          <div class="thema-bar-fill" style="width:0%;background:${clr};" data-pct="${pct}"></div>
         </div>
       </div>
       <div class="mod-list">${rows}</div>`;
+
+    const fill = contentEl.querySelector('.thema-bar-fill');
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (fill) fill.style.width = pct + '%';
+    }));
   }
 
   renderTabs();
+  const tabsHint = document.createElement('p');
+  tabsHint.style.cssText = 'font-size:12px;color:var(--color-text-muted);margin:6px 0 8px;';
+  tabsHint.textContent = 'Farben kennzeichnen die vier Themenbereiche — keine Bewertung.';
+  tabsEl.insertAdjacentElement('afterend', tabsHint);
   renderContent();
 }
 
 function renderSemesterChart() {
-  const subtitleEl  = document.getElementById('chart-subtitle');
-  const toggleWrap  = document.getElementById('chart-toggle');
   const legendEl    = document.getElementById('semester-legend');
   const tooltip     = document.getElementById('semester-tooltip');
   const svgWrap     = document.getElementById('semester-svg-wrap');
-  let   mode        = 'jahr';
 
   function drawChart() {
-    const isJahr = mode === 'jahr';
-    const labels = isJahr ? themen[0].verlauf.labels : themen[0].verlaufMonat.labels;
+    const labels = themen[0].verlauf.labels;
     const n      = labels.length;
-    subtitleEl.textContent = isJahr ? 'Sep – Mai' : 'KW 20 – KW 23';
 
     const VW=340, VH=160, ML=32, MR=8, MT=10, MB=24;
     const cW=VW-ML-MR, cH=VH-MT-MB, cBot=VH-MB;
@@ -833,9 +1174,9 @@ function renderSemesterChart() {
     let lines = '', dotsSvg = '';
     themen.forEach(t => {
       const clr  = FT_COLORS[t.id];
-      const vals = isJahr ? t.verlauf.werte : t.verlaufMonat.werte;
+      const vals = t.verlauf.werte;
       const d    = vals.map((v, i) => `${i === 0 ? 'M' : 'L'} ${xI(i).toFixed(1)} ${yV(v).toFixed(1)}`).join(' ');
-      lines += `<path d="${d}" fill="none" stroke="${clr}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
+      lines += `<path class="chart-line-path" d="${d}" fill="none" stroke="${clr}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
       vals.forEach((v, i) => {
         dotsSvg += `<circle class="chart-dot" cx="${xI(i).toFixed(1)}" cy="${yV(v).toFixed(1)}" r="4.5"
           fill="${clr}" stroke="white" stroke-width="1.5"
@@ -843,15 +1184,17 @@ function renderSemesterChart() {
       });
     });
 
+    const yAxisCy = (MT + cH / 2).toFixed(0);
     svgWrap.innerHTML = `<svg width="100%" viewBox="0 0 ${VW} ${VH}" style="display:block;overflow:visible;">
       ${grid}
+      <text transform="rotate(-90, 8, ${yAxisCy})" x="8" y="${yAxisCy}" text-anchor="middle" font-size="8" fill="#94A3B8">Kompetenz (%)</text>
       <line x1="${ML}" y1="${cBot}" x2="${VW-MR}" y2="${cBot}" stroke="#CBD5E1" stroke-width="1.5"/>
       ${lines}${dotsSvg}
       ${xLabels}
     </svg>`;
 
     legendEl.innerHTML = themen.map(t => {
-      const werte = isJahr ? t.verlauf.werte : t.verlaufMonat.werte;
+      const werte = t.verlauf.werte;
       const gain  = werte[werte.length - 1] - werte[0];
       const sign  = gain >= 0 ? '+' : '';
       return `<span class="semester-legend-item">
@@ -868,23 +1211,12 @@ function renderSemesterChart() {
         tooltip._t = setTimeout(() => tooltip.classList.remove('visible'), 2200);
       });
     });
+
+    if (document.getElementById('screen-fortschritt').classList.contains('active')) {
+      animateSemesterLines();
+    }
   }
 
-  function renderToggle() {
-    toggleWrap.innerHTML =
-      `<button class="chart-toggle-btn${mode === 'jahr'   ? ' active' : ''}" data-mode="jahr">Schuljahr</button>` +
-      `<button class="chart-toggle-btn${mode === 'monat'  ? ' active' : ''}" data-mode="monat">Letzter Monat</button>`;
-    toggleWrap.querySelectorAll('.chart-toggle-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        if (btn.dataset.mode === mode) return;
-        mode = btn.dataset.mode;
-        renderToggle();
-        drawChart();
-      });
-    });
-  }
-
-  renderToggle();
   drawChart();
 }
 
@@ -1069,30 +1401,9 @@ function renderAbzeichenScroll() {
 let refKompValue = null;  // null = not yet touched
 let refEmoValue  = null;  // null = not yet touched
 
-function getSysWochenInfo() {
-  if (aktivesZiel.typ === 'zeit') {
-    const geplant  = woche.filter(t => t.geplant).length;
-    const erledigt = woche.filter(t => t.geplant && t.erledigt).length;
-    const pct      = geplant > 0 ? Math.round(erledigt / geplant * 100) : 0;
-    return {
-      pct,
-      label: `Dein Zielfortschritt diese Woche: ${pct}% · ${erledigt} von ${geplant} geplanten Lerntagen`
-    };
-  }
-  const v        = aktivesZiel.verlauf || [];
-  const geplant  = aktivesZiel.konzepteProWoche || 5;
-  const erledigt = v.length >= 2 ? v[v.length - 1].konzepte - v[v.length - 2].konzepte : 0;
-  const pct      = geplant > 0 ? Math.min(100, Math.round(erledigt / geplant * 100)) : 0;
-  return {
-    pct,
-    label: `Dein Zielfortschritt diese Woche: ${pct}% · ${erledigt} von ${geplant} geplanten Konzepten`
-  };
-}
-
 function initReflexion() {
   renderCheckin();
   renderEntwicklungsChart();
-  renderLernzeitmuster();
   updateReflexionEmpfehlung();
 }
 
@@ -1105,17 +1416,11 @@ function setSliderFill(el, color) {
 function renderCheckin() {
   const kompSlider = document.getElementById('ref-komp-slider');
   const kompHint   = document.getElementById('ref-komp-hint');
-  const sysMarker  = document.getElementById('ref-sys-marker');
-  const sysText    = document.getElementById('ref-sys-text');
 
   kompSlider.min   = 0;
   kompSlider.max   = 10;
   kompSlider.value = 5;
-
-  const sysInfo = getSysWochenInfo();
-  const sysPct  = sysInfo.pct / 100;
-  sysMarker.style.left = `calc(${sysPct * 100}% + ${(0.5 - sysPct) * 22}px)`;
-  document.getElementById('ref-sys-marker-pct').textContent = `${sysInfo.pct}%`;
+  kompSlider.style.setProperty('--thumb-color', '#60B4FF');
 
   ['mousedown', 'touchstart'].forEach(evt => {
     kompSlider.addEventListener(evt, () => {
@@ -1127,12 +1432,9 @@ function renderCheckin() {
     if (refKompValue === null) {
       kompSlider.classList.remove('ref-slider--empty');
       kompHint.style.display = 'none';
-      sysMarker.style.display = 'flex';
-      sysText.style.display   = 'block';
-      sysText.textContent     = sysInfo.label;
     }
     refKompValue = parseInt(kompSlider.value);
-    setSliderFill(kompSlider, '#3B82F6');
+    setSliderFill(kompSlider, '#60B4FF');
     updateReflexionEmpfehlung();
   });
 
@@ -1141,7 +1443,7 @@ function renderCheckin() {
   emoSlider.min   = 0;
   emoSlider.max   = 10;
   emoSlider.value = 5;
-  emoSlider.style.backgroundImage = 'linear-gradient(to right, #F59E0B, #94A3B8 50%, #22C55E)';
+  emoSlider.style.setProperty('--thumb-color', '#C4B5FD');
 
   ['mousedown', 'touchstart'].forEach(evt => {
     emoSlider.addEventListener(evt, () => {
@@ -1155,6 +1457,7 @@ function renderCheckin() {
       emoHint.style.display = 'none';
     }
     refEmoValue = parseInt(emoSlider.value);
+    setSliderFill(emoSlider, '#C4B5FD');
     updateReflexionEmpfehlung();
   });
 }
@@ -1167,48 +1470,49 @@ function updateReflexionEmpfehlung() {
     return;
   }
 
-  const highKomp = refKompValue > 5;
-  const highEmo  = refEmoValue  > 5;
+  const kompetenz = Math.round((refKompValue / 10) * 100);
+  const emotion   = Math.round((refEmoValue  / 10) * 100);
 
   const MATRIX = [
-    { // niedrig + frustriert
-      titel: 'Kleine Schritte zuerst',
-      clr: '#F59E0B',
-      text: 'Fang mit einem bekannten Konzept an, ein kleiner Erfolg baut Vertrauen auf und hilft, wieder in den Fluss zu kommen.',
-      action: 'Einstiegsaufgabe starten'
+    { // wenig + frustriert
+      titel: 'Kleiner Schritt vorwärts',
+      text: 'Diese Woche war mühsam, das passiert. Starte mit einer kurzen einfachen Aufgabe. Manchmal reicht ein kleiner Schritt um wieder in den Fluss zu kommen.'
     },
-    { // niedrig + neugierig
-      titel: 'Neugier nutzen',
-      clr: '#22C55E',
-      text: 'Deine Motivation ist dein Vorteil gerade. Probiere eine Einstiegsaufgabe in einem offenen Modul, du wirst merken, wie viel du schon weißt.',
-      action: 'Modul entdecken'
+    { // wenig + neugierig
+      titel: 'Einfach ausprobieren',
+      text: 'Du bist neugierig aber noch nicht richtig in Gang gekommen. Perfekter Moment für eine Einstiegsaufgabe, schau einfach was du schon weißt.'
     },
-    { // hoch + frustriert
+    { // mittel + frustriert
       titel: 'Kurze Auffrischung',
-      clr: '#3B82F6',
-      text: 'Du beherrschst mehr, als du gerade glaubst. Eine kurze Wiederholung eines bekannten Moduls kann helfen, das Vertrauen zurückzuholen.',
-      action: 'Wiederholung starten'
+      text: 'Du hast etwas geschafft, auch wenn es sich nicht so anfühlt. Eine kurze Wiederholung eines bekannten Kapitels kann helfen das Vertrauen zurückzubringen.'
     },
-    { // hoch + neugierig
-      titel: 'Bereit für mehr',
-      clr: '#3B82F6',
-      text: 'Du bist in bester Verfassung. Jetzt ist der richtige Moment für eine anspruchsvolle Aufgabe, setze dein Wissen in einem neuen Kontext ein.',
-      action: 'Herausforderung starten'
+    { // mittel + neugierig
+      titel: 'Nächste Stufe',
+      text: 'Solide Woche und du bist motiviert. Genau jetzt lohnt es sich ein Kapitel anzugehen das du noch nicht gut kennst.'
+    },
+    { // viel + frustriert
+      titel: 'Durchatmen',
+      text: 'Du hast viel geleistet aber fühlst dich trotzdem nicht gut dabei. Gönn dir eine Pause oder mach etwas das dir leicht fällt um die Woche positiv abzuschließen.'
+    },
+    { // viel + neugierig
+      titel: 'Volle Kraft',
+      text: 'Starke Woche und du bist in Topform. Jetzt ist der beste Moment für eine echte Herausforderung. Greif das schwierigste offene Kapitel an.'
     }
   ];
 
-  const idx = (!highKomp && !highEmo) ? 0 : (!highKomp && highEmo) ? 1 : (highKomp && !highEmo) ? 2 : 3;
+  const fortIdx = kompetenz <= 33 ? 0 : kompetenz <= 66 ? 1 : 2;
+  const emoIdx  = emotion < 50 ? 0 : 1;
+  const idx = fortIdx * 2 + emoIdx;
   const rec = MATRIX[idx];
 
   el.innerHTML = `
-    <div class="ref-chips">
-      <span class="ref-chip" style="background:${rec.clr}18;color:${rec.clr};">${highKomp ? 'Kompetenz hoch' : 'Kompetenz niedrig'}</span>
-      <span class="ref-chip" style="background:${rec.clr}18;color:${rec.clr};">${highEmo ? 'Motiviert' : 'Frustriert'}</span>
-    </div>
-    <p class="ref-rec-titel" style="color:${rec.clr};">${rec.titel}</p>
+    <p class="ref-rec-titel">${rec.titel}</p>
     <p class="ref-rec-body">${rec.text}</p>
     <p class="ref-rec-modul">Nächster Schritt: ${empfehlungen.ziel.modul}</p>
-    <button class="btn btn-primary" style="margin-top:8px;">Jetzt starten</button>`;
+    <button class="btn btn-primary" id="ref-jetzt-starten" style="margin-top:8px;">Jetzt starten</button>`;
+
+  const refStartBtn = document.getElementById('ref-jetzt-starten');
+  if (refStartBtn) refStartBtn.addEventListener('click', () => openAufgabenScreen(aktivesZiel.thema || 'AN'));
 }
 
 function renderEntwicklungsChart() {
@@ -1251,65 +1555,155 @@ function renderEntwicklungsChart() {
   wrap.innerHTML = `
     <svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;overflow:visible;">
       ${yLines}${yLabels}
-      ${polyline(kompData, '#3B82F6')}
-      ${polyline(emoData,  '#F59E0B')}
-      ${dots(kompData, '#3B82F6')}
-      ${dots(emoData,  '#F59E0B')}
+      ${polyline(kompData, '#60B4FF')}
+      ${polyline(emoData,  '#C4B5FD')}
+      ${dots(kompData, '#60B4FF')}
+      ${dots(emoData,  '#C4B5FD')}
       ${xLabels}
     </svg>
     <div class="ref-verlauf-legend">
-      <span class="ref-verlauf-dot" style="background:#3B82F6;"></span>
+      <span class="ref-verlauf-dot" style="background:#60B4FF;"></span>
       <span class="ref-verlauf-lbl">Gefühlter Lernfortschritt</span>
-      <span class="ref-verlauf-dot" style="background:#F59E0B;"></span>
+      <span class="ref-verlauf-dot" style="background:#C4B5FD;"></span>
       <span class="ref-verlauf-lbl">Emotionen beim Lernen</span>
     </div>`;
 }
 
-function renderLernzeitmuster() {
-  const wrap   = document.getElementById('ref-muster-content');
-  const maxVal = Math.max(...lernzeitmuster.map(d => d.minuten), 1);
-  const BAR_H  = 48;
+function renderLernzeitHeatmap() {
+  const wrap = document.getElementById('lz-muster-content');
 
-  const bars = lernzeitmuster.map(d => {
-    const h       = d.minuten > 0 ? Math.max(Math.round((d.minuten / maxVal) * BAR_H), 5) : 0;
-    const isEmpty = d.minuten === 0;
-    return `<div class="zt-col">
-      <span class="zt-min-lbl">${d.minuten > 0 ? d.minuten : ''}</span>
-      <div class="zt-bar-wrap">
-        <div class="zt-bar${isEmpty ? ' zt-bar--empty' : ''}" style="height:${isEmpty ? 2 : h}px;"></div>
-      </div>
-      <span class="zt-day">${d.tag}</span>
-    </div>`;
+  function minToColor(min) {
+    if (min === 0)    return '#F2F2F7';
+    if (min <= 15)    return '#BFD9FF';
+    if (min <= 30)    return '#6EB3FF';
+    return '#007AFF';
+  }
+
+  const TAGE = ['Mo','Di','Mi','Do','Fr','Sa','So'];
+  const DAYS_IN_MONTH = [31,28,31,30,31,30,31,31,30,31,30,31];
+  const daysInMonth  = DAYS_IN_MONTH[HEUTE.monat - 1];
+  const todayColIdx  = HEUTE.wochentag - 1;
+
+  // Datum jeder Spalte der aktuellen Woche
+  const weekDates = Array.from({length: 7}, (_, i) => {
+    const d = HEUTE.datum + (i - todayColIdx);
+    if (d < 1)          return d + DAYS_IN_MONTH[(HEUTE.monat - 2 + 12) % 12];
+    if (d > daysInMonth) return d - daysInMonth;
+    return d;
+  });
+
+  // Header: Tageskürzel + Datum; heutiger Tag in Blau
+  const headerRow =
+    `<div class="lz-heatmap-kw"></div>` +
+    TAGE.map((t, i) => {
+      const isToday = i === todayColIdx;
+      const style   = isToday ? `color:var(--accent-blue);font-weight:600;` : '';
+      return `<div class="lz-heatmap-day" style="${style}"><span>${t}</span><span>${weekDates[i]}</span></div>`;
+    }).join('');
+
+  const ROW_LABELS = ['Vor 3<br>Wochen', 'Vor 2<br>Wochen', 'Letzte<br>Woche', 'Diese<br>Woche'];
+
+  const manuelleMinutenHeute = manualEntries
+    .filter(e => e.typ === 'analog' && e.tag === HEUTE.tag)
+    .reduce((sum, e) => sum + e.minuten, 0);
+
+  const dataRows = lernzeitVerlauf.map((kw, wi) => {
+    const isCurrent = wi === lernzeitVerlauf.length - 1;
+    const kwStyle   = isCurrent ? `font-weight:600;color:var(--color-text);` : '';
+
+    // Gestrichelte Trennlinie vor der aktuellen Woche
+    const separator = isCurrent
+      ? `<div style="grid-column:1/-1;height:0;border-top:1.5px dashed rgba(0,122,255,0.25);margin:2px 0;"></div>`
+      : '';
+
+    const cells = kw.tage.map((d, di) => {
+      const appMinutenHeute = lernzeitmuster.find(t => t.tag === HEUTE.tag)?.minuten || 0;
+      const effMin = (isCurrent && di === todayColIdx)
+        ? d.minuten + manuelleMinutenHeute + appMinutenHeute
+        : d.minuten;
+      const bg = minToColor(effMin);
+      let outline = '';
+      if (isCurrent && di === todayColIdx) {
+        outline = 'outline:2px solid var(--accent-blue);outline-offset:1px;';
+      } else if (isCurrent) {
+        outline = 'outline:1.5px solid rgba(0,122,255,0.2);outline-offset:1px;';
+      }
+      if (effMin === 0) {
+        const isKrank = manualEntries.some(e =>
+          e.typ === 'krank' && e.tag === d.tag &&
+          e.datum === d.datum && e.monat === d.monat
+        );
+        if (isKrank) {
+          return `<div class="lz-heatmap-cell" style="background:var(--bg-card);${outline};display:flex;align-items:center;justify-content:center;font-size:12px;" title="Fehltag">🤒</div>`;
+        }
+      }
+      return `<div class="lz-heatmap-cell" style="background:${bg};${outline}" title="${effMin} min"></div>`;
+    }).join('');
+
+    return `${separator}<div class="lz-heatmap-kw" style="${kwStyle}">${ROW_LABELS[wi]}</div>${cells}`;
   }).join('');
 
-  const totalMin   = lernzeitmuster.reduce((a, d) => a + d.minuten, 0);
-  const activeDays = lernzeitmuster.filter(d => d.minuten > 0).length;
-  const avgActive  = activeDays > 0 ? Math.round(totalMin / activeDays) : 0;
+  const legendItems = [
+    { color: '#F2F2F7', label: '0 min' },
+    { color: '#BFD9FF', label: '1–15 min' },
+    { color: '#6EB3FF', label: '16–30 min' },
+    { color: '#007AFF', label: '31+ min' },
+  ];
+  const legendHtml = legendItems.map(({ color, label }) =>
+    `<div style="display:flex;align-items:center;gap:4px;">` +
+    `<div style="width:14px;height:14px;background:${color};border-radius:3px;flex-shrink:0;"></div>` +
+    `<span style="font-size:11px;color:var(--color-text-muted);">${label}</span>` +
+    `</div>`
+  ).join('');
 
-  const hasWeekend  = lernzeitmuster.some(d => ['Sa', 'So'].includes(d.tag) && d.minuten > 0);
-  const weekdayDays = lernzeitmuster.filter(d => !['Sa', 'So'].includes(d.tag) && d.minuten > 0).length;
-  let pattern;
-  if (activeDays >= 4) pattern = 'Regelmäßiges Lernen wie deins zahlt sich langfristig aus.';
-  else if (hasWeekend && weekdayDays < 2) pattern = 'Du lernst hauptsächlich am Wochenende — mehr Werktage könnten helfen.';
-  else pattern = 'Mehr Kontinuität kann den Lerneffekt deutlich steigern.';
+  const totalAllMin  = lernzeitVerlauf.reduce((a, kw) => a + kw.tage.reduce((b, d) => b + d.minuten, 0), 0);
+  const totalAllDays = lernzeitVerlauf.reduce((a, kw) => a + kw.tage.filter(d => d.minuten > 0).length, 0);
+  const totalMin   = Math.round(totalAllMin  / lernzeitVerlauf.length);
+  const activeDays = Math.round(totalAllDays / lernzeitVerlauf.length);
+  const avgActive  = totalAllDays > 0 ? Math.round(totalAllMin / totalAllDays) : 0;
+
+  const goalLink = aktivesZiel.typ === 'zeit'
+    ? `<p id="lz-goal-link" style="margin-top:14px;font-size:13px;color:var(--accent-blue);cursor:pointer;text-align:center;">Zeitziel anpassen →</p>`
+    : '';
 
   wrap.innerHTML = `
-    <div class="zt-chart">${bars}</div>
-    <div class="zt-stats">
+    <div class="card-title" style="margin-bottom:12px;">Dein Lernmuster<span class="info-icon" data-tip-title="Was zeigt das Lernmuster?" data-tip-text="Jedes Kästchen steht für einen Tag. Je dunkler das Blau, desto länger hast du an diesem Tag gelernt. So erkennst du deine Lerngewohnheiten auf einen Blick.">?</span></div>
+    <div class="lz-heatmap-grid">${headerRow}${dataRows}</div>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap;">
+      ${legendHtml}
+    </div>
+    <div class="zt-stats" style="margin-top:14px;">
       <div class="zt-stat">
         <span class="zt-stat-val">${activeDays}</span>
-        <span class="zt-stat-lbl">Lerntage</span>
+        <span class="zt-stat-lbl">Ø Lerntage / Woche</span>
       </div>
       <div class="zt-stat">
         <span class="zt-stat-val">${totalMin}</span>
-        <span class="zt-stat-lbl">Minuten</span>
+        <span class="zt-stat-lbl">Ø Minuten / Woche</span>
       </div>
       <div class="zt-stat">
         <span class="zt-stat-val">${avgActive}</span>
-        <span class="zt-stat-lbl">Ø min/Tag</span>
+        <span class="zt-stat-lbl">Ø Minuten / Tag</span>
       </div>
     </div>
-    <p class="zt-pattern">${pattern}</p>`;
+    <p style="font-size:11px;color:var(--color-text-muted);text-align:center;margin:4px 0 0;">Ø Durchschnitt der letzten 4 Wochen</p>
+    ${goalLink}`;
+
+  if (aktivesZiel.typ === 'zeit') {
+    document.getElementById('lz-goal-link').addEventListener('click', () => {
+      showScreen('screen-ziel');
+      setTimeout(() => {
+        const btn = document.getElementById('ziel-edit-btn');
+        if (btn) btn.click();
+      }, 150);
+    });
+  }
+}
+
+/* ── Screen 3: Lernzeit ──────────────────────────────────── */
+function initLernzeit() {
+  renderLernzeitHeatmap();
+  initManualEntry();
 }
 
 /* ── Screen 4: Anpassungen ────────────────────────────────── */
@@ -1322,17 +1716,17 @@ const anpassungenState = {
 };
 
 const TOGGLE_CONFIG = [
-  { key: 'abzeichen',        label: 'Lernabzeichen',          loc: 'Screen: Fortschritt', targetId: 'abzeichen-section' },
-  { key: 'lernzeitmuster',   label: 'Lernzeitmuster',         loc: 'Screen: Reflexion',   targetId: 'ref-muster-card' },
-  { key: 'noten',            label: 'Notenübersicht',         loc: 'Screen: Fortschritt', targetId: 'noten-section' },
   { key: 'anforderungen',    label: 'Leistungsanforderungen', loc: 'Screen: Ziel',        targetId: 'requirements-section' },
-  { key: 'mikronachrichten', label: 'Motivationsnachrichten',  loc: 'Screen: Reflexion',   targetSelector: '.zt-pattern', dependsOn: 'lernzeitmuster' },
+  { key: 'abzeichen',        label: 'Lernabzeichen',          loc: 'Screen: Fortschritt', targetId: 'abzeichen-section' },
+  { key: 'noten',            label: 'Notenübersicht',         loc: 'Screen: Fortschritt', targetId: 'noten-section' },
+  { key: 'lernzeitmuster',   label: 'Lernzeitmuster',         loc: 'Screen: Lernzeit',    targetId: 'lz-muster-card' },
+  { key: 'mikronachrichten', label: 'Motivationsnachrichten',  loc: 'Screen: Lernzeit',    targetSelector: '.zt-pattern', dependsOn: 'lernzeitmuster' },
 ];
 
 const LOCKED_CONFIG = [
   { label: 'Ziel-Visualisierung',          reason: 'Zeigt deinen Fortschritt zum aktiven Ziel.' },
   { label: 'Fortschrittsbalken pro Thema', reason: 'Kern-Feedback zu deinem Lehrplanfortschritt.' },
-  { label: 'Kompetenz-Slider',             reason: 'Wöchentliche Selbsteinschätzung.' },
+  { label: 'Lernfortschritt-Slider',        reason: 'Wöchentliche Selbsteinschätzung.' },
   { label: 'Emotions-Slider',              reason: 'Grundlage für die Lernempfehlung.' },
   { label: 'Lernempfehlungen',             reason: 'Dein personalisierter nächster Schritt.' },
   { label: 'Info-Tooltips',                reason: 'Erklärungen zu allen Metriken.' },
@@ -1445,12 +1839,20 @@ function initOnboarding() {
       dotEls[current].classList.add('active');
       if (current === total - 1) {
         dotsEl.style.display = 'none';
-        btn.textContent = 'Dashboard öffnen';
+        btn.style.display = 'none';
       }
     } else {
       overlay.remove();
       document.body.style.overflow = '';
     }
+  });
+
+  overlay.querySelectorAll('#onb-nav [data-screen]').forEach(tab => {
+    tab.addEventListener('click', () => {
+      overlay.remove();
+      document.body.style.overflow = '';
+      showScreen(tab.dataset.screen);
+    });
   });
 }
 
@@ -1460,11 +1862,12 @@ function init() {
   initZielBlock();
   initRecommendation();
   initRequirements();
-  initManualEntry();
   initFortschritt();
+  initLernzeit();
   initReflexion();
   initAnpassungen();
   initPushToggles();
+  initInfoTooltips();
 }
 
 document.addEventListener('DOMContentLoaded', init);
