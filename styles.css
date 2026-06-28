@@ -1323,6 +1323,18 @@ input[type="range"]::-moz-range-thumb {
   line-height: 1.4;
 }
 
+/* ── Themen-Overlay ──────────────────────────────────────── */
+.themen-kachel {
+  border-radius: 16px;
+  padding: 16px;
+  cursor: pointer;
+  transition: transform 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.themen-kachel:active {
+  transform: scale(0.97);
+}
+
 /* ── Info-Icon & Tooltip ─────────────────────────────────── */
 .info-icon {
   display: inline-flex;

@@ -443,15 +443,13 @@ function initZielBlock() {
         ${!frischstart ? `
           <circle cx="${xToday.toFixed(1)}" cy="${todayDotY.toFixed(1)}" r="4" fill="#3B82F6" stroke="white" stroke-width="1.5"/>
           <text x="${xToday.toFixed(1)}" y="${countLabelY.toFixed(1)}" text-anchor="middle"
-                font-size="10" fill="#3B82F6" font-weight="600">Aktuell: ${lastKonzepte}</text>
+                font-size="11" fill="#3B82F6" font-weight="700">Aktuell: ${lastKonzepte}</text>
         ` : ''}
         <text transform="rotate(-90,8,${Math.round((MT + cBot) / 2)})" x="8" y="${Math.round((MT + cBot) / 2)}" text-anchor="middle" font-size="9" fill="#94A3B8">Aufgaben</text>
         ${!frischstart ? `
           <text x="${xStart.toFixed(1)}" y="${VH - 5}" text-anchor="start"
                 font-size="10" fill="#64748B">${fmtD(startDate)}</text>
         ` : ''}
-        <text x="${xToday.toFixed(1)}" y="${VH - 5}" text-anchor="${frischstart ? 'start' : 'middle'}"
-              font-size="10" fill="#3B82F6" font-weight="600">Heute</text>
         <text x="${xEnd.toFixed(1)}" y="${VH - 5}" text-anchor="end"
               font-size="10" fill="#64748B">${fmtD(endDate)}</text>
       </svg>
@@ -485,7 +483,7 @@ function initZielBlock() {
   function openModal() {
     draftTyp      = zielState.typ;
     draftSchritt  = 1;
-    draftThemaId  = zielState.themaId;
+    draftThemaId  = null;
     draftModule   = [...zielState.ausgewaehlteModule];
     draftEnddatum = zielState.enddatum;
     draftTage     = [...zielState.tage];
@@ -540,7 +538,7 @@ function initZielBlock() {
         </div>
         <div class="modal-nav">
           <span></span>
-          <button class="btn btn-primary modal-next-btn" style="width:auto;margin-top:0;">Weiter →</button>
+          <button class="btn btn-primary modal-next-btn" style="width:auto;margin-top:0;"${draftThemaId === null ? ' disabled' : ''}>Weiter →</button>
         </div>`;
 
     } else if (draftSchritt === 2) {
@@ -821,6 +819,35 @@ function initRecommendation() {
     startBtn.style.display = '';
     startBtn.onclick       = () => openAufgabenScreen(schwächstes.id);
   }
+}
+
+/* ── Themen-Overlay ──────────────────────────────────────── */
+function openThemenOverlay() {
+  const overlay = document.getElementById('themen-overlay');
+  const grid    = document.getElementById('themen-grid');
+
+  grid.innerHTML = themen.map(t => {
+    const clr        = FT_COLORS[t.id] || '#8E8E93';
+    const gemeistert = t.module.filter(m => m.gemeistert).length;
+    const gesamt     = t.module.length;
+    return `
+      <div class="themen-kachel" style="background:${clr}1A;">
+        <p style="font-size:14px;font-weight:600;color:${clr};margin:0 0 10px;line-height:1.3;">${t.name}</p>
+        <div style="background:rgba(0,0,0,0.08);border-radius:4px;height:6px;margin-bottom:8px;">
+          <div style="background:${clr};width:${t.fortschritt}%;height:100%;border-radius:4px;"></div>
+        </div>
+        <p style="font-size:13px;font-weight:600;color:${clr};margin:0 0 2px;">${t.fortschritt}%</p>
+        <p style="font-size:12px;color:var(--color-text-muted);margin:0;">${gemeistert} von ${gesamt} Kapiteln gemeistert</p>
+      </div>`;
+  }).join('');
+
+  overlay.style.display = 'block';
+  document.body.style.overflow = 'hidden';
+
+  document.getElementById('themen-back-btn').onclick = () => {
+    overlay.style.display = 'none';
+    document.body.style.overflow = '';
+  };
 }
 
 /* ── Aufgaben-Overlay (Vorschau) ─────────────────────────── */
@@ -1508,11 +1535,10 @@ function updateReflexionEmpfehlung() {
   el.innerHTML = `
     <p class="ref-rec-titel">${rec.titel}</p>
     <p class="ref-rec-body">${rec.text}</p>
-    <p class="ref-rec-modul">Nächster Schritt: ${empfehlungen.ziel.modul}</p>
     <button class="btn btn-primary" id="ref-jetzt-starten" style="margin-top:8px;">Jetzt starten</button>`;
 
   const refStartBtn = document.getElementById('ref-jetzt-starten');
-  if (refStartBtn) refStartBtn.addEventListener('click', () => openAufgabenScreen(aktivesZiel.thema || 'AN'));
+  if (refStartBtn) refStartBtn.addEventListener('click', () => openThemenOverlay());
 }
 
 function renderEntwicklungsChart() {
